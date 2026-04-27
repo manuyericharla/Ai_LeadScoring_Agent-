@@ -7,24 +7,32 @@
       "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Migrations\\20260423084954_InitialCreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:api\\LeadScoring.Api\\Migrations\\20260423084954_InitialCreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\contracts\\leadimportcontracts.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\contracts\\leadimportcontracts.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\controllers\\leadscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\controllers\\leadscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\controllers\\dashboardcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\controllers\\dashboardcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\services\\leadimportservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\services\\leadimportservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\models\\lead.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\models\\lead.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\controllers\\leadscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\controllers\\leadscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|c:\\users\\amar_maurya\\leadscoringapi\\api\\leadscoring.api\\migrations\\20260423084954_initialcreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E1C79EFE-0878-45CD-BBE7-ACAF08C264B6}|api\\LeadScoring.Api\\LeadScoring.Api.csproj|solutionrelative:api\\leadscoring.api\\migrations\\20260423084954_initialcreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -34,11 +42,24 @@
       "DocumentGroups": [
         {
           "DockedHeight": 61,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "LeadImportContracts.cs",
+              "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Contracts\\LeadImportContracts.cs",
+              "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Contracts\\LeadImportContracts.cs",
+              "ToolTip": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Contracts\\LeadImportContracts.cs",
+              "RelativeToolTip": "api\\LeadScoring.Api\\Contracts\\LeadImportContracts.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAuwAIAAAAOAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-23T08:40:35.787Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -48,14 +69,14 @@
               "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Program.cs",
               "ToolTip": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Program.cs",
               "RelativeToolTip": "api\\LeadScoring.Api\\Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAB4AAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-04-23T08:56:23.74Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 7,
               "Title": "20260423084954_InitialCreate.cs",
               "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Migrations\\20260423084954_InitialCreate.cs",
               "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Migrations\\20260423084954_InitialCreate.cs",
@@ -63,38 +84,61 @@
               "RelativeToolTip": "api\\LeadScoring.Api\\Migrations\\20260423084954_InitialCreate.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-23T08:49:55.152Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-04-23T08:49:55.152Z"
             },
             {
               "$type": "Document",
               "DocumentIndex": 2,
+              "Title": "LeadsController.cs",
+              "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
+              "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
+              "ToolTip": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
+              "RelativeToolTip": "api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
+              "ViewState": "AgIAACoAAAAAAAAAAAAYwD4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-23T08:38:56.178Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "DashboardController.cs",
+              "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Controllers\\DashboardController.cs",
+              "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Controllers\\DashboardController.cs",
+              "ToolTip": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Controllers\\DashboardController.cs",
+              "RelativeToolTip": "api\\LeadScoring.Api\\Controllers\\DashboardController.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-23T09:49:38.172Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
               "Title": "appsettings.json",
               "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\appsettings.json",
               "RelativeDocumentMoniker": "api\\LeadScoring.Api\\appsettings.json",
               "ToolTip": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\appsettings.json",
               "RelativeToolTip": "api\\LeadScoring.Api\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
               "WhenOpened": "2026-04-23T08:43:28.547Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "LeadImportService.cs",
               "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Services\\LeadImportService.cs",
               "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Services\\LeadImportService.cs",
               "ToolTip": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Services\\LeadImportService.cs",
               "RelativeToolTip": "api\\LeadScoring.Api\\Services\\LeadImportService.cs",
-              "ViewState": "AgIAACcAAAAAAAAAAAAiwEQAAAA6AAAAAAAAAA==",
+              "ViewState": "AgIAAB4AAAAAAAAAAAAYwDgAAAANAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-23T08:41:16.484Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-04-23T08:41:16.484Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 6,
               "Title": "Lead.cs",
               "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Models\\Lead.cs",
               "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Models\\Lead.cs",
@@ -102,21 +146,7 @@
               "RelativeToolTip": "api\\LeadScoring.Api\\Models\\Lead.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAA6AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-23T08:40:53.576Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "LeadsController.cs",
-              "DocumentMoniker": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
-              "RelativeDocumentMoniker": "api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
-              "ToolTip": "C:\\Users\\Amar_Maurya\\LeadScoringAPI\\api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
-              "RelativeToolTip": "api\\LeadScoring.Api\\Controllers\\LeadsController.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAB4AAABAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-23T08:38:56.178Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-04-23T08:40:53.576Z"
             }
           ]
         },
@@ -127,10 +157,6 @@
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{0ad07096-bba9-4900-a651-0598d26f6d24}"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{004be353-6879-467c-9d1e-9ac23cdf6d49}"
             }
           ]
         }

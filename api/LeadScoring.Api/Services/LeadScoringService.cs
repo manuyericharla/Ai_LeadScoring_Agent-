@@ -1,5 +1,6 @@
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Models;
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 
 namespace LeadScoring.Api.Services;
@@ -23,9 +24,7 @@ public class LeadScoringService(LeadScoringDbContext db, IEmailService emailServ
 
         if (lead.Stage > previousStage)
         {
-            var eventName = $"lead_stage_{lead.Stage.ToString().ToLowerInvariant()}";
-            var htmlBody = FirstTimeLeadEmailTemplate.BuildHtml(lead.Email, eventName, lead.Id);
-            await emailService.SendAsync(lead.Email, FirstTimeLeadEmailTemplate.Subject, htmlBody);
+            await SendStageEmailAsync(lead);
         }
     }
 
@@ -60,5 +59,48 @@ public class LeadScoringService(LeadScoringDbContext db, IEmailService emailServ
             <= 99 => LeadStage.Mql,
             _ => LeadStage.Hot
         };
+    }
+
+    private async Task SendStageEmailAsync(Lead lead)
+    {
+        var template = await db.EmailTemplates
+            .Where(t => t.IsActive && t.Stage == lead.Stage)
+            .OrderByDescending(t => t.UpdatedAt ?? t.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (template is null)
+        {
+            return;
+        }
+
+        var eventName = $"lead_stage_{lead.Stage.ToString().ToLowerInvariant()}";
+        var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
+
+        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) && !string.IsNullOrWhiteSpace(template.CtaLink))
+        {
+            var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
+            resolvedBody += $"""
+
+                <p style="margin-top:20px;">
+                  <a href="{resolvedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
+                </p>
+                """;
+        }
+
+        await emailService.SendAsync(lead.Email, template.Subject, resolvedBody);
+    }
+
+    private static string ResolveTemplate(string value, Lead lead, string eventName, bool trackingEnabled)
+    {
+        var leadId = lead.Id.ToString("D");
+        var emailValue = trackingEnabled ? Uri.EscapeDataString(lead.Email) : lead.Email;
+        var eventValue = trackingEnabled ? Uri.EscapeDataString(eventName) : eventName;
+        var leadIdValue = trackingEnabled ? Uri.EscapeDataString(leadId) : leadId;
+
+        return value
+            .Replace("{{email}}", emailValue, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{stage}}", lead.Stage.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -1,7 +1,9 @@
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
+using LeadScoring.Api.Models;
 using LeadScoring.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LeadScoring.Api.Controllers;
 
@@ -80,35 +82,38 @@ public class LeadsController(
             return NotFound("Lead not found.");
         }
 
-        var token = tokenService.CreateLeadToken(lead.Id);
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var encodedToken = Uri.EscapeDataString(token);
-        var encodedEmail = Uri.EscapeDataString(lead.Email);
-        var encodedLeadId = Uri.EscapeDataString(lead.Id.ToString("D"));
+        var template = await db.EmailTemplates
+            .Where(t => t.IsActive && t.Stage == LeadStage.Cold)
+            .OrderByDescending(t => t.UpdatedAt ?? t.CreatedAt)
+            .FirstOrDefaultAsync();
+        if (template is null)
+        {
+            return BadRequest("No active Cold stage template found.");
+        }
 
-        const string frontendBaseUrl = "http://localhost:5173";
-        var primaryRedirect = $"{frontendBaseUrl}/book-demo/?event=book_demo_primary&email={encodedEmail}&leadId={encodedLeadId}";
-        var secondaryRedirect = $"{frontendBaseUrl}/book-demo/?event=book_demo_secondary&email={encodedEmail}&leadId={encodedLeadId}";
-        var trackedPrimary = $"{baseUrl}/track/click?token={encodedToken}&redirect={Uri.EscapeDataString(primaryRedirect)}";
-        var trackedSecondary = $"{baseUrl}/track/click?token={encodedToken}&redirect={Uri.EscapeDataString(secondaryRedirect)}";
-        var openPixel = $"{baseUrl}/track/open?token={encodedToken}";
+        const string eventName = "welcome_email";
+        var htmlBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
 
-        var htmlBody = FirstTimeLeadEmailTemplate
-            .BuildHtml(lead.Email, "book_demo", lead.Id)
-            .Replace(primaryRedirect, trackedPrimary, StringComparison.Ordinal)
-            .Replace(secondaryRedirect, trackedSecondary, StringComparison.Ordinal);
-
-        var html = $"{htmlBody}<img alt=\"\" width=\"1\" height=\"1\" src=\"{openPixel}\" />";
-
-        await emailService.SendAsync(lead.Email, FirstTimeLeadEmailTemplate.Subject, html);
+        await emailService.SendAsync(lead.Email, template.Subject, htmlBody);
 
         return Ok(new
         {
             message = "Welcome email queued.",
-            lead.Email,
-            trackedPrimary,
-            trackedSecondary,
-            openPixel
+            lead.Email
         });
+    }
+
+    private static string ResolveTemplate(string value, Lead lead, string eventName, bool trackingEnabled)
+    {
+        var leadId = lead.Id.ToString("D");
+        var emailValue = trackingEnabled ? Uri.EscapeDataString(lead.Email) : lead.Email;
+        var eventValue = trackingEnabled ? Uri.EscapeDataString(eventName) : eventName;
+        var leadIdValue = trackingEnabled ? Uri.EscapeDataString(leadId) : leadId;
+
+        return value
+            .Replace("{{email}}", emailValue, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{stage}}", LeadStage.Cold.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 }

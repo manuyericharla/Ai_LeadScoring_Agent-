@@ -19,7 +19,7 @@ public class InactivityWorker(IServiceScopeFactory scopeFactory, ILogger<Inactiv
                 logger.LogError(ex, "Inactivity scoring worker failed.");
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+            await Task.Delay(TimeSpan.FromMinutes(60), stoppingToken);
         }
     }
 }

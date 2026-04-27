@@ -1,115 +1,262 @@
-<main class="container">
-  <header class="topbar">
-    <div>
-      <h1>Lead Scoring Dashboard</h1>
-      <p class="subtitle">Track leads, import HubSpot exports, and monitor stage movement.</p>
-    </div>
-    <div class="row actions">
-      <button (click)="loadDashboard()">Refresh</button>
-      <button (click)="downloadPdfReport()">Download PDF Report</button>
-    </div>
-  </header>
-
-  <section class="panel">
-    <h2>Connect API</h2>
-    <div class="row">
-      <label for="apiBase">API Base URL</label>
-      <input id="apiBase" [(ngModel)]="apiBase" placeholder="http://localhost:5221" />
-      <button (click)="loadDashboard()">Reconnect</button>
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2>Import Leads (CSV or XLSX)</h2>
-    <div class="row">
-      <label for="source">Source</label>
-      <input id="source" [(ngModel)]="source" placeholder="hubspot" />
-      <input type="file" (change)="onFileSelected($event)" accept=".csv,.xlsx" />
-      <button (click)="importLeads()" [disabled]="importing">{{ importing ? 'Importing...' : 'Import' }}</button>
-    </div>
-    <p class="status success" *ngIf="importMessage">{{ importMessage }}</p>
-    <p class="status error" *ngIf="importError">{{ importError }}</p>
-  </section>
-
-  <section class="status" *ngIf="loading">Loading dashboard...</section>
-  <section class="status error" *ngIf="error">{{ error }}</section>
-
-  <section *ngIf="data && !loading">
-    <div class="cards">
-      <article class="card">
-        <h3>Total Leads</h3>
-        <p>{{ data.totalLeads | number }}</p>
-      </article>
-      <article class="card">
-        <h3>Cold</h3>
-        <p>{{ data.stageCounts.Cold || 0 }}</p>
-      </article>
-      <article class="card">
-        <h3>Warm</h3>
-        <p>{{ data.stageCounts.Warm || 0 }}</p>
-      </article>
-      <article class="card">
-        <h3>MQL</h3>
-        <p>{{ data.stageCounts.Mql || 0 }}</p>
-      </article>
-      <article class="card">
-        <h3>Hot</h3>
-        <p>{{ data.stageCounts.Hot || 0 }}</p>
-      </article>
-    </div>
-
-    <h2 class="section-title">Event Volume</h2>
-    <div class="cards">
-      <article class="card">
-        <h3>Opens</h3>
-        <p>{{ data.eventsByType.Open || 0 }}</p>
-      </article>
-      <article class="card">
-        <h3>Email Clicks</h3>
-        <p>{{ data.eventsByType.EmailClick || 0 }}</p>
-      </article>
-      <article class="card">
-        <h3>Website Activity</h3>
-        <p>{{ data.eventsByType.WebsiteActivity || 0 }}</p>
-      </article>
-    </div>
-
-    <h2 class="section-title">Leads</h2>
-    <div class="pagination-bar">
-      <div class="row">
-        <label for="pageSize">Rows per page</label>
-        <select id="pageSize" [(ngModel)]="pageSize" (change)="onPageSizeChange()">
-          <option [ngValue]="10">10</option>
-          <option [ngValue]="25">25</option>
-          <option [ngValue]="50">50</option>
-        </select>
-      </div>
-      <div class="row">
-        <button (click)="previousPage()" [disabled]="currentPage === 1">Previous</button>
-        <span class="page-indicator">Page {{ currentPage }} of {{ totalPages }}</span>
-        <button (click)="nextPage()" [disabled]="currentPage === totalPages">Next</button>
+<main class="container shell-layout">
+  <aside class="side-nav panel">
+    <div class="menu-brand">
+      <div class="brand-dot"></div>
+      <div>
+        <p class="brand-title">LeadScoring</p>
+        <p class="brand-subtitle">Workspace</p>
       </div>
     </div>
-    <div class="table-wrap">
-      <table>
-      <thead>
-        <tr>
-          <th>Email</th>
-          <th>Score</th>
-          <th>Stage</th>
-          <th>Last Activity</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let lead of paginatedLeads">
-          <td>{{ lead.email }}</td>
-          <td>{{ lead.score }}</td>
-          <td [ngClass]="getStageClass(lead.stage)">{{ lead.stage }}</td>
-          <td>{{ lead.lastActivityUtc | date: 'short' }}</td>
-        </tr>
-      </tbody>
-      </table>
-    </div>
-    <p class="status">Showing {{ paginatedLeads.length }} of {{ totalLeads }} leads</p>
+    <p class="menu-heading">Menu</p>
+    <button class="tab-btn" [ngClass]="{ 'active-tab': activeTab === 'dashboard' }" (click)="setActiveTab('dashboard')">
+      <span class="menu-icon"><img src="/assets/icons/nav-dashboard.png" alt="Dashboard" /></span>
+      <span>Dashboard</span>
+    </button>
+    <button class="tab-btn" [ngClass]="{ 'active-tab': activeTab === 'company-config' }" (click)="setActiveTab('company-config')">
+      <span class="menu-icon"><img src="/assets/icons/nav-company-config.png" alt="Company Config" /></span>
+      <span>Company Config</span>
+    </button>
+  </aside>
+
+  <section class="content-area" *ngIf="activeTab === 'dashboard'">
+    <header class="topbar">
+      <div>
+        <h1>Lead Scoring Dashboard</h1>
+        <p class="subtitle">Track leads, import HubSpot exports, and monitor stage movement.</p>
+      </div>
+      <div class="row actions">
+        <button (click)="loadDashboard()">Refresh</button>
+        <button (click)="downloadPdfReport()">Download PDF Report</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Connect API</h2>
+        <span class="status-badge" [ngClass]="apiConnected ? 'badge-connected' : 'badge-disconnected'">
+          {{ apiConnected ? 'Connected' : 'Disconnected' }}
+        </span>
+      </div>
+      <div class="row compact-row">
+        <label for="apiBase">API Base URL</label>
+        <input id="apiBase" [(ngModel)]="apiBase" placeholder="http://localhost:5221" />
+        <button (click)="loadDashboard()">Reconnect</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Import Leads (CSV or XLSX)</h2>
+      <div class="row compact-row">
+        <label for="source">Source</label>
+        <input id="source" [(ngModel)]="source" placeholder="hubspot" />
+        <input type="file" (change)="onFileSelected($event)" accept=".csv,.xlsx" />
+        <button (click)="importLeads()" [disabled]="importing">{{ importing ? 'Importing...' : 'Import' }}</button>
+      </div>
+      <p class="helper-text">Max file size: 10MB • Supported formats: CSV, XLSX</p>
+      <p class="status success" *ngIf="importMessage">{{ importMessage }}</p>
+      <p class="status error" *ngIf="importError">{{ importError }}</p>
+    </section>
+
+    <section class="status" *ngIf="loading">Loading dashboard...</section>
+    <section class="status error" *ngIf="error">{{ error }}</section>
+
+    <section *ngIf="data && !loading">
+      <div class="cards">
+        <article class="card metric-card">
+          <div class="metric-head">
+            <h3>Total Leads</h3>
+            <img class="metric-icon" src="/assets/icons/total-leads.png" alt="Total leads" />
+          </div>
+          <p>{{ data.totalLeads | number }}</p>
+        </article>
+        <article class="card metric-card">
+          <div class="metric-head">
+            <h3>Cold</h3>
+            <img class="metric-icon" src="/assets/icons/cold.png" alt="Cold stage" />
+          </div>
+          <p>{{ data.stageCounts.Cold || 0 }}</p>
+        </article>
+        <article class="card metric-card">
+          <div class="metric-head">
+            <h3>Warm</h3>
+            <img class="metric-icon" src="/assets/icons/warm.png" alt="Warm stage" />
+          </div>
+          <p>{{ data.stageCounts.Warm || 0 }}</p>
+        </article>
+        <article class="card metric-card">
+          <div class="metric-head">
+            <h3>MQL</h3>
+            <img class="metric-icon" src="/assets/icons/mql.png" alt="MQL stage" />
+          </div>
+          <p>{{ data.stageCounts.Mql || 0 }}</p>
+        </article>
+        <article class="card metric-card">
+          <div class="metric-head">
+            <h3>Hot</h3>
+            <img class="metric-icon" src="/assets/icons/hot.png" alt="Hot stage" />
+          </div>
+          <p>{{ data.stageCounts.Hot || 0 }}</p>
+        </article>
+      </div>
+
+      <h2 class="section-title">Event Volume</h2>
+      <div class="cards">
+        <article class="card">
+          <h3>Opens</h3>
+          <p>{{ data.eventsByType.Open || 0 }}</p>
+        </article>
+        <article class="card">
+          <h3>Email Clicks</h3>
+          <p>{{ data.eventsByType.EmailClick || 0 }}</p>
+        </article>
+        <article class="card">
+          <h3>Website Activity</h3>
+          <p>{{ data.eventsByType.WebsiteActivity || 0 }}</p>
+        </article>
+      </div>
+
+      <h2 class="section-title">Leads</h2>
+      <div class="pagination-bar">
+        <div class="row">
+          <label for="pageSize">Rows per page</label>
+          <select id="pageSize" [(ngModel)]="pageSize" (change)="onPageSizeChange()">
+            <option [ngValue]="10">10</option>
+            <option [ngValue]="25">25</option>
+            <option [ngValue]="50">50</option>
+          </select>
+        </div>
+        <div class="row">
+          <button (click)="previousPage()" [disabled]="currentPage === 1">Previous</button>
+          <span class="page-indicator">Page {{ currentPage }} of {{ totalPages }}</span>
+          <button (click)="nextPage()" [disabled]="currentPage === totalPages">Next</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Score</th>
+              <th>Stage</th>
+              <th>Last Activity</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let lead of paginatedLeads">
+              <td>{{ lead.email }}</td>
+              <td>{{ lead.score }}</td>
+              <td [ngClass]="getStageClass(lead.stage)">{{ lead.stage }}</td>
+              <td>{{ lead.lastActivityUtc | date: 'short' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="status">Showing {{ paginatedLeads.length }} of {{ totalLeads }} leads</p>
+    </section>
+  </section>
+
+  <section class="content-area" *ngIf="activeTab === 'company-config'">
+    <header class="topbar">
+      <div>
+        <h1>Company Config</h1>
+        <p class="subtitle">Create product event-score mapping for each company.</p>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Company Product Config</h2>
+      <p class="status" *ngIf="editingConfigId">Editing existing config. You can add/remove items and update scores.</p>
+      <div class="config-grid">
+        <div class="row">
+          <label for="companyName">Company Name</label>
+          <input id="companyName" [(ngModel)]="companyProductForm.companyName" placeholder="Scadea.com" />
+        </div>
+        <div class="row">
+          <label for="productName">Product Name</label>
+          <input id="productName" [(ngModel)]="companyProductForm.productName" placeholder="Hiperbrains.com" />
+        </div>
+        <div class="row">
+          <label for="productId">Product ID</label>
+          <input id="productId" type="number" min="1" [(ngModel)]="companyProductForm.productId" />
+        </div>
+      </div>
+
+      <h3 class="subheading">Product Event Config (Event -> Score)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Event Name</th>
+              <th>Score</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of companyProductForm.items; let i = index">
+              <td>
+                <input [(ngModel)]="item.eventName" placeholder="Pricing page / Book demo / Signup" />
+              </td>
+              <td>
+                <input type="number" min="0" [(ngModel)]="item.score" />
+              </td>
+              <td>
+                <button (click)="removeEventItem(i)" [disabled]="companyProductForm.items.length === 1">Remove</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="row actions-row">
+        <button (click)="addEventItem()">Add Item</button>
+        <button (click)="saveCompanyConfig()" [disabled]="savingConfig">
+          {{ savingConfig ? 'Saving...' : (editingConfigId ? 'Update Config' : 'Submit Config') }}
+        </button>
+        <button *ngIf="editingConfigId" (click)="cancelCompanyConfigEdit()" [disabled]="savingConfig">Cancel Edit</button>
+      </div>
+      <p class="status success" *ngIf="configSuccess">{{ configSuccess }}</p>
+      <p class="status error" *ngIf="configError">{{ configError }}</p>
+    </section>
+
+    <section class="panel">
+      <h2>Company Product Config List</h2>
+      <div class="row">
+        <label for="companyFilter">Filter by Company</label>
+        <input id="companyFilter" [(ngModel)]="companyNameFilter" placeholder="Scadea.com" />
+        <button (click)="loadCompanyConfigs()">Apply Filter</button>
+      </div>
+      <p class="status" *ngIf="configLoading">Loading configs...</p>
+      <div class="table-wrap" *ngIf="!configLoading">
+        <table>
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Product</th>
+              <th>Product ID</th>
+              <th>Event Config</th>
+              <th>Created</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let config of companyConfigs">
+              <td>{{ config.companyName }}</td>
+              <td>{{ config.productName }}</td>
+              <td>{{ config.productId }}</td>
+              <td>
+                <span class="event-chip" *ngFor="let event of eventConfigEntries(config.productEventConfig)">
+                  {{ event.key }}: {{ event.value }}
+                </span>
+              </td>
+              <td>{{ config.createdAtUtc | date: 'short' }}</td>
+              <td><button (click)="editCompanyConfig(config)">Edit</button></td>
+            </tr>
+            <tr *ngIf="companyConfigs.length === 0">
+              <td colspan="6">No company configs found.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </section>
 </main>
