@@ -333,8 +333,22 @@ export class AppComponent implements OnInit {
       return 'http://localhost:5221';
     }
 
+    if (this.isPrivateIpv4Host(host)) {
+      return `http://${host}:5221`;
+    }
+
     // In deployed environments, use same-origin and let nginx proxy /api.
     return '';
+  }
+
+  private isPrivateIpv4Host(host: string): boolean {
+    const parts = host.split('.').map((x) => Number(x));
+    if (parts.length !== 4 || parts.some((x) => Number.isNaN(x) || x < 0 || x > 255)) {
+      return false;
+    }
+
+    const [a, b] = parts;
+    return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
   }
 }
 

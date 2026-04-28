@@ -195,7 +195,8 @@ jobs:
               exit 1
             fi
 
-            if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null; then
+            if docker run --rm --network "$NETWORK_NAME" curlimages/curl:8.10.1 \
+              -fsS "http://leadscoring-api:8080/health" >/dev/null; then
               echo "API health check passed."
               break
             fi
