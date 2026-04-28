@@ -188,17 +188,24 @@ jobs:
             "$UI_IMAGE"
 
           echo "Waiting for API health..."
-          for i in {1..20}; do
+          for i in {1..60}; do
+            if [ "$(docker inspect -f '{{.State.Running}}' "$API_CONTAINER" 2>/dev/null || echo false)" != "true" ]; then
+              echo "API container is not running."
+              docker logs "$API_CONTAINER" --tail 100 || true
+              exit 1
+            fi
+
             if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null; then
               echo "API health check passed."
               break
             fi
-            if [ "$i" -eq 20 ]; then
+
+            if [ "$i" -eq 60 ]; then
               echo "API health check failed after retries."
               docker logs "$API_CONTAINER" --tail 100 || true
               exit 1
             fi
-            sleep 3
+            sleep 2
           done
 
           docker image prune -f
