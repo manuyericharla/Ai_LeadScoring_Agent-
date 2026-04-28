@@ -1,0 +1,200 @@
+name: Build & Deploy LeadScoring (API + UI)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - DEV
+      - QA
+      - DEMO24
+      - main
+
+concurrency:
+  group: leadscoring-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy - ${{ github.ref_name }}
+    runs-on:
+      - self-hosted
+      - ${{ github.ref_name == 'DEV' && 'dev' || github.ref_name == 'QA' && 'qa' || github.ref_name == 'DEMO24' && 'uat' || 'prod' }}
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.ACCESSKEYID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SECRETKEY }}
+      AWS_DEFAULT_REGION: us-east-2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${{ github.ref_name }}" in
+            DEV)
+              echo "ENV=DEV" >> "$GITHUB_ENV"
+              echo "CONFIG_URL=${{ secrets.CONFIG_SERVER_DEV }}" >> "$GITHUB_ENV"
+              echo "BACKEND_PORT=8111" >> "$GITHUB_ENV"
+              echo "FRONTEND_PORT=8211" >> "$GITHUB_ENV"
+              ;;
+            QA)
+              echo "ENV=QA" >> "$GITHUB_ENV"
+              echo "CONFIG_URL=${{ secrets.CONFIG_SERVER_QA }}" >> "$GITHUB_ENV"
+              echo "BACKEND_PORT=8112" >> "$GITHUB_ENV"
+              echo "FRONTEND_PORT=8212" >> "$GITHUB_ENV"
+              ;;
+            DEMO24)
+              echo "ENV=DEMO" >> "$GITHUB_ENV"
+              echo "CONFIG_URL=${{ secrets.CONFIG_SERVER_DEMO }}" >> "$GITHUB_ENV"
+              echo "BACKEND_PORT=8113" >> "$GITHUB_ENV"
+              echo "FRONTEND_PORT=8213" >> "$GITHUB_ENV"
+              ;;
+            main)
+              echo "ENV=PROD" >> "$GITHUB_ENV"
+              echo "CONFIG_URL=${{ secrets.CONFIG_SERVER_PROD }}" >> "$GITHUB_ENV"
+              echo "BACKEND_PORT=8114" >> "$GITHUB_ENV"
+              echo "FRONTEND_PORT=8214" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported branch: ${{ github.ref_name }}"
+              exit 1
+              ;;
+          esac
+
+          echo "GIT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "NETWORK_NAME=leadscoring-${{ github.ref_name }}" >> "$GITHUB_ENV"
+          echo "API_CONTAINER=leadscoring-api-${{ github.ref_name }}" >> "$GITHUB_ENV"
+          echo "UI_CONTAINER=leadscoring-ui-${{ github.ref_name }}" >> "$GITHUB_ENV"
+          echo "API_IMAGE=leadscoring-api:${{ github.ref_name }}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "UI_IMAGE=leadscoring-ui:${{ github.ref_name }}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Verify AWS Credentials
+        shell: bash
+        run: |
+          echo "Access Key length: ${#AWS_ACCESS_KEY_ID}"
+          echo "Secret Key length: ${#AWS_SECRET_ACCESS_KEY}"
+          aws sts get-caller-identity
+
+      - name: Build Backend Image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --no-cache -t "$API_IMAGE" -f - ./api <<'EOF'
+          FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+          WORKDIR /src
+          COPY . .
+          RUN dotnet restore "LeadScoring.Api/LeadScoring.Api.csproj"
+          RUN dotnet publish "LeadScoring.Api/LeadScoring.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+          FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+          WORKDIR /app
+          COPY --from=build /app/publish .
+          ENV ASPNETCORE_URLS=http://+:8080
+          EXPOSE 8080
+          ENTRYPOINT ["dotnet", "LeadScoring.Api.dll"]
+          EOF
+
+      - name: Build Frontend Image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cp "ui/src/app/app.component.ts" "ui/src/app/app.component.ts.bak"
+          trap 'mv "ui/src/app/app.component.ts.bak" "ui/src/app/app.component.ts"' EXIT
+          perl -0pi -e "s|apiBase = 'http://localhost:5221';|apiBase = '';|g" "ui/src/app/app.component.ts"
+
+          docker build --no-cache -t "$UI_IMAGE" -f - ./ui <<'EOF'
+          # syntax=docker/dockerfile:1.7
+          FROM node:20-alpine AS build
+          WORKDIR /app
+          COPY package*.json ./
+          RUN npm ci
+          COPY . .
+          RUN npm run build
+
+          FROM nginx:1.27-alpine
+          COPY --from=build /app/dist/ui/browser /usr/share/nginx/html
+          RUN cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+          server {
+              listen 80;
+              server_name _;
+              root /usr/share/nginx/html;
+              index index.html;
+
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+
+              location /api/ {
+                  proxy_pass http://leadscoring-api:8080/api/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+          NGINX
+          EXPOSE 80
+          EOF
+
+      - name: Deploy Containers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "====================================="
+          echo "ENV           : $ENV"
+          echo "BACKEND PORT  : $BACKEND_PORT"
+          echo "FRONTEND PORT : $FRONTEND_PORT"
+          echo "API IMAGE     : $API_IMAGE"
+          echo "UI IMAGE      : $UI_IMAGE"
+          echo "====================================="
+
+          docker network create "$NETWORK_NAME" 2>/dev/null || true
+
+          docker stop "$API_CONTAINER" 2>/dev/null || true
+          docker rm -f "$API_CONTAINER" 2>/dev/null || true
+          docker stop "$UI_CONTAINER" 2>/dev/null || true
+          docker rm -f "$UI_CONTAINER" 2>/dev/null || true
+
+          docker run -d \
+            --name "$API_CONTAINER" \
+            --network "$NETWORK_NAME" \
+            --network-alias leadscoring-api \
+            -p "${BACKEND_PORT}:8080" \
+            -e ASPNETCORE_ENVIRONMENT="$ENV" \
+            -e ConfigUrl="$CONFIG_URL" \
+            --restart unless-stopped \
+            --log-driver=awslogs \
+            --log-opt awslogs-region=us-east-2 \
+            --log-opt awslogs-group=leadscoring-api \
+            --log-opt awslogs-create-group=true \
+            --log-opt awslogs-stream="$API_CONTAINER" \
+            "$API_IMAGE"
+
+          docker run -d \
+            --name "$UI_CONTAINER" \
+            --network "$NETWORK_NAME" \
+            -p "${FRONTEND_PORT}:80" \
+            --restart unless-stopped \
+            --log-driver=awslogs \
+            --log-opt awslogs-region=us-east-2 \
+            --log-opt awslogs-group=leadscoring-ui \
+            --log-opt awslogs-create-group=true \
+            --log-opt awslogs-stream="$UI_CONTAINER" \
+            "$UI_IMAGE"
+
+          docker image prune -f
+
+          echo "====================================="
+          echo "Deploy complete"
+          echo "API container : $API_CONTAINER -> :$BACKEND_PORT"
+          echo "UI container  : $UI_CONTAINER -> :$FRONTEND_PORT"
+          echo "====================================="
