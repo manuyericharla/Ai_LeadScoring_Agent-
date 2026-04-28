@@ -31,20 +31,6 @@
     </header>
 
     <section class="panel">
-      <div class="panel-header">
-        <h2>Connect API</h2>
-        <span class="status-badge" [ngClass]="apiConnected ? 'badge-connected' : 'badge-disconnected'">
-          {{ apiConnected ? 'Connected' : 'Disconnected' }}
-        </span>
-      </div>
-      <div class="row compact-row">
-        <label for="apiBase">API Base URL</label>
-        <input id="apiBase" [(ngModel)]="apiBase" placeholder="http://localhost:5221" />
-        <button (click)="loadDashboard()">Reconnect</button>
-      </div>
-    </section>
-
-    <section class="panel">
       <h2>Import Leads (CSV or XLSX)</h2>
       <div class="row compact-row">
         <label for="source">Source</label>

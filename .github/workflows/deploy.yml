@@ -105,10 +105,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          cp "ui/src/app/app.component.ts" "ui/src/app/app.component.ts.bak"
-          trap 'mv "ui/src/app/app.component.ts.bak" "ui/src/app/app.component.ts"' EXIT
-          perl -0pi -e "s|apiBase = 'http://localhost:5221';|apiBase = '';|g" "ui/src/app/app.component.ts"
-
           docker build --no-cache -t "$UI_IMAGE" -f - ./ui <<'EOF'
           # syntax=docker/dockerfile:1.7
           FROM node:20-alpine AS build
@@ -190,6 +186,20 @@ jobs:
             --log-opt awslogs-create-group=true \
             --log-opt awslogs-stream="$UI_CONTAINER" \
             "$UI_IMAGE"
+
+          echo "Waiting for API health..."
+          for i in {1..20}; do
+            if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null; then
+              echo "API health check passed."
+              break
+            fi
+            if [ "$i" -eq 20 ]; then
+              echo "API health check failed after retries."
+              docker logs "$API_CONTAINER" --tail 100 || true
+              exit 1
+            fi
+            sleep 3
+          done
 
           docker image prune -f
 

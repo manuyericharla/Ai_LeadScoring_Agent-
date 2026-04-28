@@ -44,10 +44,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("ui");
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/", () => Results.Redirect("/swagger"));
 app.MapControllers();
 

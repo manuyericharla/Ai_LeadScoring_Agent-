@@ -13,7 +13,7 @@ import autoTable from 'jspdf-autotable';
 })
 export class AppComponent implements OnInit {
   private readonly http = inject(HttpClient);
-  apiBase = 'http://localhost:5221';
+  apiBase = this.resolveApiBase();
   loading = false;
   error = '';
   data?: DashboardResponse;
@@ -148,10 +148,6 @@ export class AppComponent implements OnInit {
       default:
         return '';
     }
-  }
-
-  get apiConnected(): boolean {
-    return !this.loading && !this.error;
   }
 
   downloadPdfReport(): void {
@@ -325,6 +321,20 @@ export class AppComponent implements OnInit {
       productId: 1,
       items: [{ eventName: '', score: 0 }]
     };
+  }
+
+  private resolveApiBase(): string {
+    if (typeof window === 'undefined') {
+      return 'http://localhost:5221';
+    }
+
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:5221';
+    }
+
+    // In deployed environments, use same-origin and let nginx proxy /api.
+    return '';
   }
 }
 
