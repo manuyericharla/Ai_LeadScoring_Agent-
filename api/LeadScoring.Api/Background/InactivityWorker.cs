@@ -6,13 +6,17 @@ public class InactivityWorker(IServiceScopeFactory scopeFactory, ILogger<Inactiv
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var followUpDelay = TimeSpan.FromHours(1);
+        const int maxAttemptsPerDay = 3;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 using var scope = scopeFactory.CreateScope();
                 var scoring = scope.ServiceProvider.GetRequiredService<LeadScoringService>();
-                await scoring.CheckFirstEmailScoreUpdateAsync(TimeSpan.FromHours(1));
+                await scoring.CheckFirstEmailScoreUpdateAsync(followUpDelay);
+                await scoring.RunWelcomeFollowUpSchedulerAsync(followUpDelay, maxAttemptsPerDay, stoppingToken);
             }
             catch (Exception ex)
             {

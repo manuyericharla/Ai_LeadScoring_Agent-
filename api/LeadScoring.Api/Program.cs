@@ -21,11 +21,20 @@ builder.Services.AddDbContext<LeadScoringDbContext>(opt =>
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<LeadScoringService>();
 builder.Services.AddScoped<LeadImportService>();
+builder.Services.AddScoped<IFollowUpSubjectGenerator, OpenAiFollowUpSubjectGenerator>();
+builder.Services.AddHttpClient(nameof(OpenAiFollowUpSubjectGenerator), client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
 builder.Services.AddScoped<IBatchRepository, BatchRepository>();
 builder.Services.AddScoped<IBatchProcessingService, BatchProcessingService>();
 builder.Services.AddHttpClient(nameof(UserSignupStatusService), client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddHttpClient("TrackingClickProbe", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(3);
 });
 builder.Services.AddScoped<IUserSignupStatusService, UserSignupStatusService>();
 var disableEmailSending = builder.Configuration.GetValue<bool>("Email:DisableSending");

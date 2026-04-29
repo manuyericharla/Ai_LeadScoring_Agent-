@@ -24,8 +24,14 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
     {
         return db.Leads
             .AsNoTracking()
-            .Where(x => x.ProductId == productId && x.Stage == stage && x.CreatedAtUtc > sinceUtc)
-            .OrderBy(x => x.CreatedAtUtc)
+            .Where(x =>
+                x.ProductId == productId &&
+                x.Stage == stage &&
+                (
+                    x.CreatedAtUtc > sinceUtc ||
+                    (x.LastScoredAtUtc.HasValue && x.LastScoredAtUtc.Value > sinceUtc)
+                ))
+            .OrderBy(x => x.LastScoredAtUtc ?? x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
     }
 

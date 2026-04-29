@@ -12,8 +12,6 @@ namespace LeadScoring.Api.Controllers;
 [Route("api/leads")]
 public class LeadsController(
     LeadScoringDbContext db,
-    TokenService tokenService,
-    IEmailService emailService,
     LeadImportService leadImportService) : ControllerBase
 {
     [HttpPost("email-exists")]
@@ -171,63 +169,20 @@ public class LeadsController(
     }
 
     [HttpPost("{leadId:guid}/send-email")]
-    public async Task<IActionResult> SendEmail(Guid leadId, [FromBody] SendEmailRequest request)
+    public IActionResult SendEmail(Guid leadId, [FromBody] SendEmailRequest request)
     {
-        var lead = await db.Leads.FindAsync(leadId);
-        if (lead is null)
+        return StatusCode(StatusCodes.Status410Gone, new
         {
-            return NotFound("Lead not found.");
-        }
-
-        var token = tokenService.CreateLeadToken(lead.Id);
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var openPixel = $"{baseUrl}/track/open?token={Uri.EscapeDataString(token)}";
-        var trackedLink = $"{baseUrl}/track/click?token={Uri.EscapeDataString(token)}&redirect={Uri.EscapeDataString(request.RedirectUrl)}";
-        var html = $"{request.HtmlBody}<img alt=\"\" width=\"1\" height=\"1\" src=\"{openPixel}\" /><p><a href=\"{trackedLink}\">Continue</a></p>";
-
-        await emailService.SendAsync(lead.Email, request.Subject, html);
-        return Ok(new { message = "Email queued.", trackedLink, openPixel });
+            message = "Manual send-email endpoint is disabled. Use batch runner and follow-up scheduler flows only."
+        });
     }
 
     [HttpPost("{leadId:guid}/send-welcome-email")]
-    public async Task<IActionResult> SendWelcomeEmail(Guid leadId)
+    public IActionResult SendWelcomeEmail(Guid leadId)
     {
-        var lead = await db.Leads.FindAsync(leadId);
-        if (lead is null)
+        return StatusCode(StatusCodes.Status410Gone, new
         {
-            return NotFound("Lead not found.");
-        }
-
-        var template = await db.EmailTemplates
-            .Where(t => t.IsActive && t.Stage == LeadStage.Cold && (t.ProductId == lead.ProductId || t.ProductId == null))
-            .OrderByDescending(t => t.ProductId == lead.ProductId)
-            .ThenByDescending(t => t.UpdatedAt ?? t.CreatedAt)
-            .FirstOrDefaultAsync();
-        if (template is null)
-        {
-            return BadRequest("No active Cold stage template found.");
-        }
-
-        const string eventName = "welcome_email";
-        var htmlBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
-
-        await emailService.SendAsync(lead.Email, template.Subject, htmlBody);
-        lead.WelcomeEmailSent = true;
-        db.Events.Add(new LeadEvent
-        {
-            Id = Guid.NewGuid(),
-            LeadId = lead.Id,
-            Type = EventType.WebsiteActivity,
-            Source = EventSource.Email,
-            TimestampUtc = DateTime.UtcNow,
-            MetadataJson = $$"""{"eventName":"welcome_email","systemMarker":"WelcomeEmailSent"}"""
-        });
-        await db.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message = "Welcome email queued.",
-            lead.Email
+            message = "Manual send-welcome-email endpoint is disabled. Use batch runner and follow-up scheduler flows only."
         });
     }
 

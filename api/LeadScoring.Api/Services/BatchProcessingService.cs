@@ -9,6 +9,8 @@ public class BatchProcessingService(
     IBatchRepository batchRepository,
     IUserSignupStatusService userSignupStatusService,
     IEmailService emailService,
+    TokenService tokenService,
+    IConfiguration configuration,
     ILogger<BatchProcessingService> logger) : IBatchProcessingService
 {
     private static readonly DateTime DefaultStartDate = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -274,22 +276,29 @@ public class BatchProcessingService(
         if (!string.IsNullOrWhiteSpace(template.CtaButtonText) && !string.IsNullOrWhiteSpace(template.CtaLink))
         {
             var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
+            var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
             resolvedBody += $"""
 
                 <p style="margin-top:20px;">
-                  <a href="{resolvedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
+                  <a href="{trackedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
                 </p>
                 """;
         }
 
+        var sentAtUtc = DateTime.UtcNow;
         await emailService.SendAsync(lead.Email, template.Subject, resolvedBody);
+        if (lead.Stage == LeadStage.Cold && !template.IsFollowUp)
+        {
+            lead.WelcomeEmailSent = true;
+            lead.LastActivityUtc = sentAtUtc;
+        }
         await batchRepository.AddEventAsync(new LeadEvent
         {
             Id = Guid.NewGuid(),
             LeadId = lead.Id,
             Type = EventType.WebsiteActivity,
             Source = EventSource.Email,
-            TimestampUtc = DateTime.UtcNow,
+            TimestampUtc = sentAtUtc,
             MetadataJson = $$"""{"eventName":"{{eventName}}","templateName":"{{template.Name}}","systemMarker":"BatchStageEmailSent"}"""
         }, cancellationToken);
 
@@ -309,6 +318,18 @@ public class BatchProcessingService(
             .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{stage}}", lead.Stage.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string BuildTrackedClickUrl(Lead lead, string destinationUrl)
+    {
+        if (!Uri.IsWellFormedUriString(destinationUrl, UriKind.Absolute))
+        {
+            return destinationUrl;
+        }
+
+        var token = tokenService.CreateLeadToken(lead.Id);
+        var trackingBaseUrl = (configuration["Tracking:BaseUrl"] ?? "http://localhost:8211").TrimEnd('/');
+        return $"{trackingBaseUrl}/track/click?token={Uri.EscapeDataString(token)}&redirect={Uri.EscapeDataString(destinationUrl)}";
     }
 
     private sealed record LeadProcessResult(bool IsSuccess, string? ErrorMessage)

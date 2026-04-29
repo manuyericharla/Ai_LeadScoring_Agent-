@@ -6,7 +6,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LeadScoring.Api.Services;
 
-public class LeadScoringService(LeadScoringDbContext db, IEmailService emailService)
+public class LeadScoringService(
+    LeadScoringDbContext db,
+    IEmailService emailService,
+    TokenService tokenService,
+    IConfiguration configuration,
+    IFollowUpSubjectGenerator followUpSubjectGenerator)
 {
     public async Task AddEventAsync(LeadEvent leadEvent)
     {
@@ -29,10 +34,7 @@ public class LeadScoringService(LeadScoringDbContext db, IEmailService emailServ
 
         await db.SaveChangesAsync();
 
-        if (lead.Stage > previousStage)
-        {
-            await SendStageEmailAsync(lead);
-        }
+        // Stage-triggered emails are intentionally disabled.
     }
 
     public async Task CheckFirstEmailScoreUpdateAsync(TimeSpan scoreCheckDelay)
@@ -91,6 +93,93 @@ public class LeadScoringService(LeadScoringDbContext db, IEmailService emailServ
         }
 
         await db.SaveChangesAsync();
+    }
+
+    public async Task RunWelcomeFollowUpSchedulerAsync(TimeSpan followUpDelay, int maxAttemptsPerDay, CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var thresholdUtc = nowUtc.Subtract(followUpDelay);
+        var today = nowUtc.Date;
+
+        var leads = await db.Leads
+            .Where(x => x.WelcomeEmailSent && x.LastScoredAtUtc == null && x.LastActivityUtc <= thresholdUtc)
+            .ToListAsync(cancellationToken);
+
+        foreach (var lead in leads)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var followUpEvents = await db.Events
+                .Where(e =>
+                    e.LeadId == lead.Id &&
+                    e.MetadataJson != null &&
+                    e.MetadataJson.Contains("\"systemMarker\":\"WelcomeFollowUpEmailSent\""))
+                .OrderByDescending(e => e.TimestampUtc)
+                .ToListAsync(cancellationToken);
+
+            var sentTodayCount = followUpEvents.Count(e => e.TimestampUtc.Date == today);
+            if (sentTodayCount >= maxAttemptsPerDay)
+            {
+                continue;
+            }
+
+            var lastFollowUpSentAt = followUpEvents.FirstOrDefault()?.TimestampUtc;
+            var intervalBaseUtc = lastFollowUpSentAt ?? lead.LastActivityUtc;
+            if (nowUtc - intervalBaseUtc < followUpDelay)
+            {
+                continue;
+            }
+
+            var template = await db.EmailTemplates
+                .Where(t => t.IsActive && t.IsFollowUp && t.Stage == LeadStage.Cold && (t.ProductId == lead.ProductId || t.ProductId == null))
+                .OrderByDescending(t => t.ProductId == lead.ProductId)
+                .ThenByDescending(t => t.UpdatedAt ?? t.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (template is null)
+            {
+                continue;
+            }
+
+            var attemptNumber = sentTodayCount + 1;
+            var eventName = $"welcome_followup_{attemptNumber}";
+            var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
+            if (!string.IsNullOrWhiteSpace(template.CtaButtonText) && !string.IsNullOrWhiteSpace(template.CtaLink))
+            {
+                var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
+                var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
+                resolvedBody += $"""
+
+                    <p style="margin-top:20px;">
+                      <a href="{trackedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
+                    </p>
+                    """;
+            }
+
+            var subject = template.Subject;
+            if (attemptNumber is 2 or 3)
+            {
+                subject = await followUpSubjectGenerator.GenerateSubjectAsync(
+                    template.Subject,
+                    lead,
+                    attemptNumber,
+                    cancellationToken);
+            }
+
+            await emailService.SendAsync(lead.Email, subject, resolvedBody);
+
+            lead.LastActivityUtc = nowUtc;
+            db.Events.Add(new LeadEvent
+            {
+                Id = Guid.NewGuid(),
+                LeadId = lead.Id,
+                Type = EventType.WebsiteActivity,
+                Source = EventSource.Email,
+                TimestampUtc = nowUtc,
+                MetadataJson = $$"""{"eventName":"{{eventName}}","attempt":{{attemptNumber}},"subject":"{{JsonEncodedText.Encode(subject)}}","systemMarker":"WelcomeFollowUpEmailSent"}"""
+            });
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private static LeadStage ResolveStage(int score)
@@ -260,15 +349,23 @@ public class LeadScoringService(LeadScoringDbContext db, IEmailService emailServ
         if (!string.IsNullOrWhiteSpace(template.CtaButtonText) && !string.IsNullOrWhiteSpace(template.CtaLink))
         {
             var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
+            var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
             resolvedBody += $"""
 
                 <p style="margin-top:20px;">
-                  <a href="{resolvedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
+                  <a href="{trackedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
                 </p>
                 """;
         }
 
+        var sentAtUtc = DateTime.UtcNow;
         await emailService.SendAsync(lead.Email, template.Subject, resolvedBody);
+
+        if (lead.Stage == LeadStage.Cold && !template.IsFollowUp)
+        {
+            lead.WelcomeEmailSent = true;
+            lead.LastActivityUtc = sentAtUtc;
+        }
     }
 
     private static string ResolveTemplate(string value, Lead lead, string eventName, bool trackingEnabled)
@@ -283,5 +380,17 @@ public class LeadScoringService(LeadScoringDbContext db, IEmailService emailServ
             .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{stage}}", lead.Stage.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string BuildTrackedClickUrl(Lead lead, string destinationUrl)
+    {
+        if (!Uri.IsWellFormedUriString(destinationUrl, UriKind.Absolute))
+        {
+            return destinationUrl;
+        }
+
+        var token = tokenService.CreateLeadToken(lead.Id);
+        var trackingBaseUrl = (configuration["Tracking:BaseUrl"] ?? "http://localhost:8211").TrimEnd('/');
+        return $"{trackingBaseUrl}/track/click?token={Uri.EscapeDataString(token)}&redirect={Uri.EscapeDataString(destinationUrl)}";
     }
 }

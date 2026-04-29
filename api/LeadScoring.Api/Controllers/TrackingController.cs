@@ -3,6 +3,7 @@ using System.Text.Json;
 using LeadScoring.Api.Models;
 using LeadScoring.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
 
 namespace LeadScoring.Api.Controllers;
 
@@ -10,6 +11,8 @@ namespace LeadScoring.Api.Controllers;
 [Route("track")]
 public class TrackingController(
     TokenService tokenService,
+    IHttpClientFactory httpClientFactory,
+    ILogger<TrackingController> logger,
     LeadScoringService scoringService) : ControllerBase
 {
     [HttpGet("open")]
@@ -34,6 +37,7 @@ public class TrackingController(
             return BadRequest("Invalid token or redirect URL.");
         }
 
+        var probe = await ProbeRedirectStatusAsync(redirect);
         await scoringService.AddEventAsync(new LeadEvent
         {
             Id = Guid.NewGuid(),
@@ -41,10 +45,35 @@ public class TrackingController(
             Type = EventType.EmailClick,
             Source = EventSource.Email,
             TimestampUtc = DateTime.UtcNow,
-            MetadataJson = $$"""{"redirect":"{{redirect}}","eventName":"Email click"}"""
+            MetadataJson = JsonSerializer.Serialize(new
+            {
+                redirect,
+                eventName = "Email click",
+                redirectStatusCode = probe.StatusCode,
+                redirectSuccess = probe.IsSuccess,
+                probeError = probe.Error
+            })
         });
 
         return Redirect(redirect);
+    }
+
+    private async Task<(int? StatusCode, bool IsSuccess, string? Error)> ProbeRedirectStatusAsync(string redirect)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Head, redirect);
+            var client = httpClientFactory.CreateClient("TrackingClickProbe");
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            var statusCode = (int)response.StatusCode;
+            var isSuccess = response.IsSuccessStatusCode || response.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect or HttpStatusCode.RedirectMethod or HttpStatusCode.RedirectKeepVerb or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
+            return (statusCode, isSuccess, null);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Tracking redirect probe failed for {Redirect}", redirect);
+            return (null, false, ex.Message);
+        }
     }
 
     [HttpPost("event")]
