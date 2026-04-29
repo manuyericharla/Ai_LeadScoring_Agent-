@@ -25,7 +25,7 @@ public class LeadScoringDbContext(DbContextOptions<LeadScoringDbContext> options
             .IsUnique();
 
         modelBuilder.Entity<BatchConfig>().HasKey(x => x.ConfigId);
-        modelBuilder.Entity<BatchConfig>().HasIndex(x => new { x.ProductId, x.IsActive });
+        modelBuilder.Entity<BatchConfig>().HasIndex(x => new { x.ProductId, x.Stage, x.IsActive });
 
         modelBuilder.Entity<Batch>().HasKey(x => x.BatchId);
         modelBuilder.Entity<Batch>().HasIndex(x => x.ProductId);

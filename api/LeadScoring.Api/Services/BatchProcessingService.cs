@@ -12,6 +12,9 @@ public class BatchProcessingService(
     ILogger<BatchProcessingService> logger) : IBatchProcessingService
 {
     private static readonly DateTime DefaultStartDate = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeSpan DayInterval = TimeSpan.FromDays(1);
+    private static readonly TimeSpan WeekInterval = TimeSpan.FromDays(7);
+    private static readonly TimeSpan MonthInterval = TimeSpan.FromDays(30);
 
     public async Task ProcessActiveConfigsAsync(CancellationToken cancellationToken)
     {
@@ -96,69 +99,126 @@ public class BatchProcessingService(
     {
         try
         {
-            var lastRun = await batchRepository.GetLastSuccessfulBatchEndTimeAsync(config.ProductId, config.BatchType, cancellationToken);
-            var leads = await batchRepository.GetLeadsAfterAsync(config.ProductId, lastRun ?? DefaultStartDate, cancellationToken);
-            var batch = new Batch
+            var nowUtc = DateTime.UtcNow;
+            var windowsToRun = GetWindowsToRun(config, nowUtc);
+            if (windowsToRun.Count == 0)
             {
-                ProductId = config.ProductId,
-                BatchType = config.BatchType,
-                StartTime = DateTime.UtcNow,
-                Status = BatchStatus.Running,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await batchRepository.CreateBatchAsync(batch, cancellationToken);
-
-            var batchLeads = leads.Select(lead => new BatchLead
-            {
-                BatchId = batch.BatchId,
-                LeadId = lead.Id,
-                Status = BatchLeadStatus.Pending,
-                RetryCount = 0
-            }).ToList();
-
-            await batchRepository.CreateBatchLeadsAsync(batchLeads, cancellationToken);
-
-            var successCount = 0;
-            var failedCount = 0;
-            foreach (var batchLead in batchLeads)
-            {
-                var result = await ProcessLeadAsync(batchLead.LeadId, cancellationToken);
-                if (result.IsSuccess)
-                {
-                    batchLead.Status = BatchLeadStatus.Success;
-                    batchLead.ErrorMessage = null;
-                    successCount++;
-                }
-                else
-                {
-                    batchLead.Status = BatchLeadStatus.Failed;
-                    batchLead.ErrorMessage = result.ErrorMessage;
-                    failedCount++;
-                }
-
-                batchLead.ProcessedAt = DateTime.UtcNow;
+                return;
             }
 
-            batch.TotalLeads = batchLeads.Count;
-            batch.SuccessCount = successCount;
-            batch.FailedCount = failedCount;
-            batch.Status = failedCount > 0 ? BatchStatus.Failed : BatchStatus.Completed;
-            batch.EndTime = DateTime.UtcNow;
-            await batchRepository.SaveChangesAsync(cancellationToken);
+            var sinceUtc = config.UpdatedAt ?? DefaultStartDate;
+            var leads = await batchRepository.GetLeadsAfterAsync(config.ProductId, config.Stage, sinceUtc, cancellationToken);
 
-            logger.LogInformation(
-                "Processed batch {BatchId} for product {ProductId}. Total={Total}, Success={Success}, Failed={Failed}",
-                batch.BatchId,
-                batch.ProductId,
-                batch.TotalLeads,
-                batch.SuccessCount,
-                batch.FailedCount);
+            foreach (var batchType in windowsToRun)
+            {
+                await ProcessBatchWindowAsync(config, batchType, leads, cancellationToken);
+            }
+
+            config.UpdatedAt = nowUtc;
+            await batchRepository.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed processing config {ConfigId} for product {ProductId}", config.ConfigId, config.ProductId);
         }
+    }
+
+    private async Task ProcessBatchWindowAsync(BatchConfig config, BatchType batchType, List<Lead> leads, CancellationToken cancellationToken)
+    {
+        var batch = new Batch
+        {
+            ProductId = config.ProductId,
+            BatchType = batchType,
+            StartTime = DateTime.UtcNow,
+            Status = BatchStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await batchRepository.CreateBatchAsync(batch, cancellationToken);
+
+        var batchLeads = leads.Select(lead => new BatchLead
+        {
+            BatchId = batch.BatchId,
+            LeadId = lead.Id,
+            Status = BatchLeadStatus.Pending,
+            RetryCount = 0
+        }).ToList();
+
+        await batchRepository.CreateBatchLeadsAsync(batchLeads, cancellationToken);
+
+        var successCount = 0;
+        var failedCount = 0;
+        foreach (var batchLead in batchLeads)
+        {
+            var result = await ProcessLeadAsync(batchLead.LeadId, cancellationToken);
+            if (result.IsSuccess)
+            {
+                batchLead.Status = BatchLeadStatus.Success;
+                batchLead.ErrorMessage = null;
+                successCount++;
+            }
+            else
+            {
+                batchLead.Status = BatchLeadStatus.Failed;
+                batchLead.ErrorMessage = result.ErrorMessage;
+                failedCount++;
+            }
+
+            batchLead.ProcessedAt = DateTime.UtcNow;
+        }
+
+        batch.TotalLeads = batchLeads.Count;
+        batch.SuccessCount = successCount;
+        batch.FailedCount = failedCount;
+        batch.Status = failedCount > 0 ? BatchStatus.Failed : BatchStatus.Completed;
+        batch.EndTime = DateTime.UtcNow;
+        await batchRepository.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Processed {BatchType} batch {BatchId} for product {ProductId} at stage {Stage}. Total={Total}, Success={Success}, Failed={Failed}",
+            batchType,
+            batch.BatchId,
+            batch.ProductId,
+            config.Stage,
+            batch.TotalLeads,
+            batch.SuccessCount,
+            batch.FailedCount);
+    }
+
+    private static List<BatchType> GetWindowsToRun(BatchConfig config, DateTime nowUtc)
+    {
+        var windows = new List<BatchType>();
+        if (ShouldRun(config.Day, config.UpdatedAt, nowUtc, DayInterval))
+        {
+            windows.Add(BatchType.Daily);
+        }
+
+        if (ShouldRun(config.Week, config.UpdatedAt, nowUtc, WeekInterval))
+        {
+            windows.Add(BatchType.Weekly);
+        }
+
+        if (ShouldRun(config.Month, config.UpdatedAt, nowUtc, MonthInterval))
+        {
+            windows.Add(BatchType.Monthly);
+        }
+
+        return windows;
+    }
+
+    private static bool ShouldRun(bool enabled, DateTime? updatedAt, DateTime nowUtc, TimeSpan interval)
+    {
+        if (!enabled)
+        {
+            return false;
+        }
+
+        if (updatedAt is null)
+        {
+            return true;
+        }
+
+        return nowUtc - updatedAt.Value >= interval;
     }
 
     private async Task<LeadProcessResult> ProcessLeadAsync(Guid leadId, CancellationToken cancellationToken)
