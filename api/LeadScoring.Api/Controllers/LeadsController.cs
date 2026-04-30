@@ -55,6 +55,28 @@ public class LeadsController(
             EventCreated: true));
     }
 
+    [HttpPost("identify")]
+    public async Task<ActionResult<LeadIdentifyResponse>> Identify([FromBody] LeadIdentifyRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.VisitorId))
+        {
+            return BadRequest("visitorId is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest("email is required.");
+        }
+
+        var result = await visitorAttributionService.IdentifyLeadByEmailAsync(request);
+
+        return Ok(new LeadIdentifyResponse(
+            LeadId: result.Lead.Id,
+            Email: result.Lead.Email,
+            LeadCreated: result.LeadCreated,
+            VisitorMapped: result.VisitorMapped));
+    }
+
     [HttpPost("import-file")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> ImportFile([FromForm] ImportLeadsRequest request)

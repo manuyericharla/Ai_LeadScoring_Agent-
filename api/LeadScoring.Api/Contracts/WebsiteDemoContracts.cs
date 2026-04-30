@@ -27,3 +27,15 @@ public record LeadEmailExistsResponse(
     string Email,
     bool Exists,
     Guid? LeadId);
+
+public record LeadIdentifyRequest(
+    string VisitorId,
+    string Email,
+    string? Source,
+    string? Campaign);
+
+public record LeadIdentifyResponse(
+    Guid LeadId,
+    string Email,
+    bool LeadCreated,
+    bool VisitorMapped);

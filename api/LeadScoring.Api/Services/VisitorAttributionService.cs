@@ -153,6 +153,87 @@ public class VisitorAttributionService(LeadScoringDbContext db)
         return (lead, leadCreated, visitorMapped);
     }
 
+    public async Task<(Lead Lead, bool LeadCreated, bool VisitorMapped)> IdentifyLeadByEmailAsync(LeadIdentifyRequest request)
+    {
+        var visitorId = request.VisitorId.Trim();
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var nowUtc = DateTime.UtcNow;
+
+        var visitor = await db.Visitors.FirstOrDefaultAsync(x => x.VisitorId == visitorId);
+        var visitorSource = visitor?.FirstSource ?? ParseSource(request.Source);
+        if (visitor is null)
+        {
+            visitor = new Visitor
+            {
+                VisitorId = visitorId,
+                FirstSource = visitorSource,
+                UserAgent = null,
+                IpAddress = null,
+                CreatedAtUtc = nowUtc
+            };
+            db.Visitors.Add(visitor);
+        }
+
+        var lead = await db.Leads.FirstOrDefaultAsync(x => EF.Functions.ILike(x.Email, normalizedEmail));
+        var leadCreated = false;
+        if (lead is null)
+        {
+            lead = new Lead
+            {
+                Id = Guid.NewGuid(),
+                VisitorId = visitorId,
+                Email = normalizedEmail,
+                ProductId = null,
+                WelcomeEmailSent = false,
+                Score = 0,
+                Stage = LeadStage.Cold,
+                CreatedAtUtc = nowUtc,
+                LastActivityUtc = nowUtc,
+                FirstSource = visitorSource,
+                LastSource = visitorSource
+            };
+            db.Leads.Add(lead);
+            leadCreated = true;
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(lead.VisitorId))
+            {
+                lead.VisitorId = visitorId;
+            }
+
+            lead.LastActivityUtc = nowUtc;
+            lead.LastSource = visitorSource;
+            if (lead.FirstSource is null)
+            {
+                lead.FirstSource = visitorSource;
+            }
+        }
+
+        var existingMap = await db.LeadVisitorMaps
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.LeadId == lead.Id && x.VisitorId == visitorId);
+
+        var visitorMapped = false;
+        if (existingMap is null)
+        {
+            db.LeadVisitorMaps.Add(new LeadVisitorMap
+            {
+                LeadId = lead.Id,
+                VisitorId = visitorId,
+                CreatedAtUtc = nowUtc
+            });
+            visitorMapped = true;
+        }
+
+        await db.Events
+            .Where(x => x.VisitorId == visitorId && x.LeadId == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.LeadId, lead.Id));
+
+        await db.SaveChangesAsync();
+        return (lead, leadCreated, visitorMapped);
+    }
+
     public static EventSource ParseSource(string? source)
     {
         if (string.IsNullOrWhiteSpace(source))
