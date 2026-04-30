@@ -12,8 +12,12 @@ public enum EventType
 
 public enum EventSource
 {
-    Email,
-    Website
+    Unknown = 0,
+    Email = 1,
+    Website = 2,
+    LinkedIn = 3,
+    Direct = 4,
+    Organic = 5
 }
 
 public enum LeadStage

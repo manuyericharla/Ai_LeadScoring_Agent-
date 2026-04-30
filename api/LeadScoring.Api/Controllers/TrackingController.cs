@@ -13,8 +13,38 @@ public class TrackingController(
     TokenService tokenService,
     IHttpClientFactory httpClientFactory,
     ILogger<TrackingController> logger,
-    LeadScoringService scoringService) : ControllerBase
+    LeadScoringService scoringService,
+    VisitorAttributionService visitorAttributionService,
+    IConfiguration configuration) : ControllerBase
 {
+    [HttpGet("/r")]
+    public async Task<IActionResult> UniversalTrackingLink([FromQuery] string? src, [FromQuery] string? cmp, [FromQuery] string? redirect)
+    {
+        var source = VisitorAttributionService.ParseSource(src);
+        var visitorId = GetOrCreateVisitorId();
+        var userAgent = Request.Headers.UserAgent.ToString();
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        await visitorAttributionService.EnsureVisitorAsync(visitorId, source, userAgent, ipAddress);
+        await visitorAttributionService.TrackAnonymousEventAsync(
+            visitorId,
+            source,
+            EventType.WebsiteActivity,
+            metadataJson: $$"""{"eventName":"UniversalTrackingClick","source":"{{source}}"}""",
+            campaign: cmp);
+
+        Response.Cookies.Append("visitorId", visitorId, new CookieOptions
+        {
+            HttpOnly = false,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddYears(1)
+        });
+
+        var destination = ResolveRedirect(redirect);
+        return Redirect(destination);
+    }
+
     [HttpGet("open")]
     public IActionResult TrackOpen([FromQuery] string token)
     {
@@ -79,20 +109,44 @@ public class TrackingController(
     [HttpPost("event")]
     public async Task<IActionResult> TrackEvent([FromBody] TrackEventRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.VisitorId))
+        {
+            return BadRequest("visitorId is required.");
+        }
+
         var eventType = Enum.TryParse<EventType>(request.EventType, true, out var parsed) ? parsed : EventType.WebsiteActivity;
         var metadataJson = MergeMetadata(request.MetadataJson, request.EventType);
+        var source = VisitorAttributionService.ParseSource(request.Source);
 
-        await scoringService.AddEventAsync(new LeadEvent
-        {
-            Id = Guid.NewGuid(),
-            LeadId = request.LeadId,
-            Type = eventType,
-            Source = EventSource.Website,
-            TimestampUtc = DateTime.UtcNow,
-            MetadataJson = metadataJson
-        });
+        await visitorAttributionService.TrackAnonymousEventAsync(
+            request.VisitorId,
+            source,
+            eventType,
+            metadataJson,
+            request.Campaign,
+            request.LeadId);
 
         return Accepted();
+    }
+
+    private string ResolveRedirect(string? redirect)
+    {
+        if (!string.IsNullOrWhiteSpace(redirect) && Uri.IsWellFormedUriString(redirect, UriKind.Absolute))
+        {
+            return redirect;
+        }
+
+        return configuration["Tracking:DefaultRedirectUrl"] ?? "https://www.hiperlabs.com";
+    }
+
+    private string GetOrCreateVisitorId()
+    {
+        if (Request.Cookies.TryGetValue("visitorId", out var visitorId) && !string.IsNullOrWhiteSpace(visitorId))
+        {
+            return visitorId;
+        }
+
+        return Guid.NewGuid().ToString("N");
     }
 
     private static string? MergeMetadata(string? metadataJson, string? eventType)

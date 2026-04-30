@@ -3,6 +3,8 @@ namespace LeadScoring.Api.Contracts;
 public record WebsiteDemoSubmitRequest(
     string VisitorId,
     string Email,
+    string? Source,
+    string? Campaign,
     string? FirstName,
     string? LastName,
     string? PhoneNumber,

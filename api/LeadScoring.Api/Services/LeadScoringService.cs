@@ -15,7 +15,14 @@ public class LeadScoringService(
 {
     public async Task AddEventAsync(LeadEvent leadEvent)
     {
-        var lead = await db.Leads.FindAsync(leadEvent.LeadId);
+        if (leadEvent.LeadId is null)
+        {
+            db.Events.Add(leadEvent);
+            await db.SaveChangesAsync();
+            return;
+        }
+
+        var lead = await db.Leads.FindAsync(leadEvent.LeadId.Value);
         if (lead is null)
         {
             throw new InvalidOperationException("Lead not found.");
@@ -53,27 +60,30 @@ public class LeadScoringService(
         }
 
         var latestFirstEmails = firstEmailEvents
+            .Where(e => e.LeadId != null)
             .GroupBy(e => e.LeadId)
             .Select(g => g.OrderByDescending(x => x.TimestampUtc).First())
             .ToList();
 
-        var leadIds = latestFirstEmails.Select(x => x.LeadId).Distinct().ToList();
+        var leadIds = latestFirstEmails.Select(x => x.LeadId!.Value).Distinct().ToList();
         var checks = await db.Events
             .Where(e =>
-                leadIds.Contains(e.LeadId) &&
+                e.LeadId != null &&
+                leadIds.Contains(e.LeadId.Value) &&
                 e.MetadataJson != null &&
                 e.MetadataJson.Contains("\"systemMarker\":\"FirstEmailScoreChecked\""))
             .ToListAsync();
 
         foreach (var sentEvent in latestFirstEmails)
         {
-            var alreadyChecked = checks.Any(c => c.LeadId == sentEvent.LeadId && c.TimestampUtc >= sentEvent.TimestampUtc);
+            var sentLeadId = sentEvent.LeadId!.Value;
+            var alreadyChecked = checks.Any(c => c.LeadId == sentLeadId && c.TimestampUtc >= sentEvent.TimestampUtc);
             if (alreadyChecked)
             {
                 continue;
             }
 
-            var lead = await db.Leads.FindAsync(sentEvent.LeadId);
+            var lead = await db.Leads.FindAsync(sentLeadId);
             if (lead is null)
             {
                 continue;
@@ -111,6 +121,7 @@ public class LeadScoringService(
 
             var followUpEvents = await db.Events
                 .Where(e =>
+                    e.LeadId != null &&
                     e.LeadId == lead.Id &&
                     e.MetadataJson != null &&
                     e.MetadataJson.Contains("\"systemMarker\":\"WelcomeFollowUpEmailSent\""))

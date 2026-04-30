@@ -20,6 +20,7 @@ builder.Services.AddDbContext<LeadScoringDbContext>(opt =>
 });
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<LeadScoringService>();
+builder.Services.AddScoped<VisitorAttributionService>();
 builder.Services.AddScoped<LeadImportService>();
 builder.Services.AddScoped<IFollowUpSubjectGenerator, OpenAiFollowUpSubjectGenerator>();
 builder.Services.AddHttpClient(nameof(OpenAiFollowUpSubjectGenerator), client =>
