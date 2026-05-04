@@ -15,7 +15,8 @@ import {
   Chart,
   Legend,
   LinearScale,
-  Tooltip
+  Tooltip,
+  TooltipItem
 } from 'chart.js';
 
 export type EventsByTypeInput = Partial<Record<'Open' | 'EmailClick' | 'WebsiteActivity', number>>;
@@ -149,7 +150,7 @@ export class EventsBarChartComponent implements AfterViewInit, OnChanges, OnDest
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (item) =>
+              label: (item: TooltipItem<'bar'>) =>
                 `${item.label}: ${typeof item.raw === 'number' ? item.raw.toLocaleString() : String(item.raw)}`
             }
           }

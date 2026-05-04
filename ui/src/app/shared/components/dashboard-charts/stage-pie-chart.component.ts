@@ -15,7 +15,8 @@ import {
   Chart,
   Legend,
   LinearScale,
-  Tooltip
+  Tooltip,
+  TooltipItem
 } from 'chart.js';
 
 export type StageCountsInput = Partial<Record<'Cold' | 'Warm' | 'Mql' | 'Hot', number>>;
@@ -157,7 +158,7 @@ export class StagePieChartComponent implements AfterViewInit, OnChanges, OnDestr
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (item) => {
+              label: (item: TooltipItem<'bar'>) => {
                 const vs = item.dataset.data as number[];
                 const n = typeof item.raw === 'number' ? item.raw : Number(item.raw);
                 const total = vs.reduce((a, b) => a + b, 0);
