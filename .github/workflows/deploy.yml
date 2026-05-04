@@ -85,7 +85,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker build --no-cache -t "$API_IMAGE" -f - ./api <<'EOF'
+          docker buildx build --load --no-cache -t "$API_IMAGE" -f - ./api <<'EOF'
           FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
           WORKDIR /src
           COPY . .
@@ -105,7 +105,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker build --no-cache -t "$UI_IMAGE" -f - ./ui <<'EOF'
+          docker buildx build --load --no-cache -t "$UI_IMAGE" -f - ./ui <<'EOF'
           # syntax=docker/dockerfile:1.7
           FROM node:20-alpine AS build
           WORKDIR /app
@@ -152,6 +152,18 @@ jobs:
           echo "API IMAGE     : $API_IMAGE"
           echo "UI IMAGE      : $UI_IMAGE"
           echo "====================================="
+
+          docker image inspect "$API_IMAGE" >/dev/null || {
+            echo "API image not present locally: $API_IMAGE"
+            docker image ls --format '{{.Repository}}:{{.Tag}}' | sed -n '/^leadscoring-api:/p' || true
+            exit 1
+          }
+
+          docker image inspect "$UI_IMAGE" >/dev/null || {
+            echo "UI image not present locally: $UI_IMAGE"
+            docker image ls --format '{{.Repository}}:{{.Tag}}' | sed -n '/^leadscoring-ui:/p' || true
+            exit 1
+          }
 
           docker network create "$NETWORK_NAME" 2>/dev/null || true
 
