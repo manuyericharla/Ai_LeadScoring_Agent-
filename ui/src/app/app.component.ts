@@ -35,15 +35,20 @@ export class AppComponent implements OnInit, OnDestroy {
   drawerOpen = false;
   showShell = true;
   private navSub?: Subscription;
+  private readonly gateQueryKeys = new Set(['src', 'redirect']);
 
   constructor(private readonly router: Router) {
     this.applyShellForUrl(this.router.url);
   }
 
   ngOnInit(): void {
+    this.ensureEmailGateRoute(this.router.url);
     this.navSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe(() => this.applyShellForUrl(this.router.url));
+      .subscribe(() => {
+        this.ensureEmailGateRoute(this.router.url);
+        this.applyShellForUrl(this.router.url);
+      });
   }
 
   ngOnDestroy(): void {
@@ -53,5 +58,22 @@ export class AppComponent implements OnInit, OnDestroy {
   private applyShellForUrl(fullUrl: string): void {
     const pathOnly = fullUrl.split('?')[0].split('#')[0];
     this.showShell = pathOnly !== '/email';
+  }
+  private ensureEmailGateRoute(fullUrl: string): void {
+    const [pathOnly, queryRaw] = fullUrl.split('?');
+    if (pathOnly === '/email' || !queryRaw) {
+      return;
+    }
+
+    const params = new URLSearchParams(queryRaw);
+    const hasAllGateKeys = [...this.gateQueryKeys].every((k) => !!params.get(k)?.trim());
+    if (!hasAllGateKeys) {
+      return;
+    }
+
+    void this.router.navigate(['/email'], {
+      queryParams: Object.fromEntries(params.entries()),
+      replaceUrl: true
+    });
   }
 }
