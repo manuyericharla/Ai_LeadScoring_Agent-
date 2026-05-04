@@ -26,11 +26,11 @@
   margin-bottom: var(--space-2);
 }
 
-.avatar {
+.brand-logo {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: var(--color-primary);
+  border-radius: var(--radius-md);
+  object-fit: contain;
   flex-shrink: 0;
 }
 
@@ -138,7 +138,7 @@
     padding-inline: 0;
   }
 
-  .avatar {
+  .brand-logo {
     width: 28px;
     height: 28px;
   }
