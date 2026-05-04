@@ -433,7 +433,7 @@
     </div>
 
     <div class="tracking-grid">
-      <app-input label="Redirect destination" [(ngModel)]="universalLinkRedirect" name="ulRedir" placeholder="http://localhost:5173/" [fullWidth]="true" />
+      <app-input label="Redirect destination" [(ngModel)]="universalLinkRedirect" name="ulRedir" placeholder="https://yoursite.com/landing" [fullWidth]="true" />
 
       @if (universalRedirectValidation === 'empty') {
         <p class="hint-msg">Optional: leave blank to use the API default redirect.</p>
@@ -448,7 +448,7 @@
           [ngModel]="trackingBaseUrl"
           (ngModelChange)="onTrackingBaseUrlChange($event)"
           name="trackingBaseUrl"
-          placeholder="http://localhost:5221/"
+          placeholder="https://api.yourdomain.com/"
         />
         <app-combobox
           label="Source (src)"

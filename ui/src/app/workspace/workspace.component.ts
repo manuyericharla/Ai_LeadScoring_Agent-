@@ -559,12 +559,12 @@ export class WorkspaceComponent implements OnInit {
 
   private resolveTrackingBase(): string {
     if (typeof window === 'undefined') {
-      return 'http://localhost:8211';
+      return '';
     }
 
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:8211';
+      return '';
     }
 
     if (this.isPrivateIpv4Host(host)) {
