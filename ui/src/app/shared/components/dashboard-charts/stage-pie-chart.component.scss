@@ -1,0 +1,38 @@
+@import '../../../../styles/tokens';
+
+:host {
+  display: block;
+  min-height: 200px;
+}
+
+.wrap {
+  min-height: 200px;
+  position: relative;
+}
+
+.insight {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-body);
+  background: var(--color-surface-info-bg);
+  border-left: 3px solid var(--color-surface-info-border);
+  border-radius: var(--radius-md);
+}
+
+.canvas-box {
+  height: 200px;
+  max-width: 100%;
+  position: relative;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-3);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: var(--leading-relaxed);
+}

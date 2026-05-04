@@ -1,0 +1,23 @@
+@import '../../../../styles/tokens';
+
+:host {
+  display: block;
+  min-height: 200px;
+}
+
+.wrap {
+  min-height: 200px;
+}
+
+.chart-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+}
+
+.canvas-box {
+  height: 220px;
+  max-width: 100%;
+  position: relative;
+}

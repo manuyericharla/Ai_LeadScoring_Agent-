@@ -1,0 +1,13 @@
+<article class="card">
+  @if (heading) {
+    <header class="hd">
+      <h3 class="title">{{ heading }}</h3>
+      @if (subheading) {
+        <p class="subheading">{{ subheading }}</p>
+      }
+    </header>
+  }
+  <div class="bd">
+    <ng-content />
+  </div>
+</article>

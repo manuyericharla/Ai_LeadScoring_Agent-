@@ -1,0 +1,24 @@
+<div class="wrap" [class.full]="fullWidth">
+  @if (label) {
+    <label class="lbl" [attr.for]="controlId">{{ label }}</label>
+  }
+  <input
+    [id]="controlId"
+    [type]="type"
+    [placeholder]="placeholder"
+    [disabled]="disabled"
+    [readOnly]="readOnly"
+    [attr.list]="listId || null"
+    [attr.min]="min !== undefined ? min : null"
+    [value]="displayValue"
+    (input)="onInput($event)"
+    (blur)="onBlur()"
+    [ngStyle]="inputStyle"
+    class="field"
+    [class.readonly-field]="readOnly"
+  />
+  @if (errorMessage) {
+    <p class="err">{{ errorMessage }}</p>
+  }
+  <ng-content />
+</div>

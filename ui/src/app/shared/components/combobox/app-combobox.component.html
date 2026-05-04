@@ -1,0 +1,51 @@
+<div class="wrap">
+  @if (label) {
+    <label class="lbl" [attr.for]="inputId">
+      {{ label }}
+      @if (required) {
+        <span class="req" aria-hidden="true">*</span>
+      }
+    </label>
+  }
+  <div class="control" [class.is-open]="panelVisible" [class.is-disabled]="disabled">
+    <input
+      [id]="inputId"
+      type="text"
+      class="field"
+      [placeholder]="placeholder"
+      [value]="allowCustomValue ? value : open ? filterText : value"
+      [disabled]="disabled"
+      (input)="onInput($event)"
+      (focus)="onInputFocus()"
+      (blur)="onBlur()"
+      (keydown)="onInputKeydown($event)"
+      autocomplete="off"
+      [attr.aria-expanded]="panelVisible"
+      aria-autocomplete="list"
+      [attr.aria-controls]="panelVisible ? inputId + '-listbox' : ''"
+    />
+    <button
+      type="button"
+      class="chev-btn"
+      tabindex="-1"
+      [disabled]="disabled"
+      (click)="toggleOpen($event)"
+      aria-label="Open choices"
+    >
+      <svg class="chev-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path
+          fill-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          clip-rule="evenodd"
+        />
+      </svg>
+    </button>
+    @if (panelVisible) {
+      <ul class="panel" [id]="inputId + '-listbox'" role="listbox">
+        @for (opt of filteredOptions; track opt) {
+          <li role="option" (mousedown)="selectOption(opt, $event)">{{ opt }}</li>
+        }
+      </ul>
+    }
+  </div>
+</div>

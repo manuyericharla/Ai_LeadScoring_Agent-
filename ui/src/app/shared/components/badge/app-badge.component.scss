@@ -1,0 +1,44 @@
+@import '../../../../styles/tokens';
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 20px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+}
+
+.neutral {
+  background: var(--color-bg-hover);
+  color: var(--color-text-muted);
+}
+
+.cold {
+  background: var(--color-cold-bg);
+  color: var(--color-cold-text);
+}
+
+.warm {
+  background: var(--color-warm-bg);
+  color: var(--color-warm-text);
+}
+
+.mql {
+  background: var(--color-mql-bg);
+  color: var(--color-mql-text);
+}
+
+.hot {
+  background: var(--color-hot-bg);
+  color: var(--color-hot-text);
+}
+
+.score-pos {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}

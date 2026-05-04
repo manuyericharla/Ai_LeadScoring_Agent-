@@ -1,0 +1,13 @@
+<div class="wrap">
+  @if (!hasData) {
+    <p class="empty">No staged leads to chart yet.</p>
+  }
+  @if (hasData) {
+    @if (stageInsight) {
+      <p class="insight" role="status">{{ stageInsight }}</p>
+    }
+    <div class="canvas-box">
+      <canvas #canvas role="img" aria-label="Lead count by stage (horizontal bars)"></canvas>
+    </div>
+  }
+</div>

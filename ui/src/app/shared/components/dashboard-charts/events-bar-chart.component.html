@@ -1,0 +1,8 @@
+<div class="wrap">
+  @if (dormantChannelsHint) {
+    <p class="chart-hint" role="status">{{ dormantChannelsHint }}</p>
+  }
+  <div class="canvas-box">
+    <canvas #canvas role="img" aria-label="Event counts by type"></canvas>
+  </div>
+</div>

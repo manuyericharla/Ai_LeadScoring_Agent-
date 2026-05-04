@@ -1,0 +1,156 @@
+/* =============================================================================
+   Design tokens — single source of truth for the Lead Scoring UI.
+   • Typography: use --text-* sizes, --font-weight-*, --leading-*, semantic --type-* roles.
+   • Spacing: --space-* on a 4px grid; layout helpers --section-gap-md, --card-padding.
+   • Surfaces: --color-bg-*, --color-text-*; feedback via --color-danger-* / --color-surface-*.
+   Component SCSS should prefer these variables over raw px/hex except rare one-offs.
+   ============================================================================= */
+
+/* Breakpoints — use in @media alongside :root tokens */
+$bp-desktop-sm: 1100px;
+$bp-tablet: 768px;
+$bp-mobile: 480px;
+$bp-mobile-narrow: 520px;
+
+:root {
+  /* Brand */
+  --color-primary: #22bd52;
+  --color-primary-dark: #1a9940;
+  --color-primary-light: #e8faf0;
+  --color-primary-ring: rgba(34, 189, 82, 0.15);
+
+  /* Neutrals */
+  --color-bg-page: #f8fafc;
+  --color-bg-card: #ffffff;
+  --color-bg-hover: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-light: #f1f5f9;
+
+  /* Text */
+  --color-text-heading: #0f172a;
+  --color-text-body: #334155;
+  --color-text-muted: #94a3b8;
+  --color-text-placeholder: #cbd5e1;
+
+  /* Feedback & actions */
+  --color-danger: #ef4444;
+  --color-danger-bg: #fef2f2;
+  --color-danger-text: #b91c1c;
+
+  /* Semantic surfaces */
+  --color-surface-info-bg: #eff6ff;
+  --color-surface-info-border: #3b82f6;
+  --color-surface-danger-bg: #fef2f2;
+  --color-surface-danger-text: #b91c1c;
+  --color-surface-danger-accent: #ef4444;
+  --color-surface-warning-text: #b45309;
+
+  /* Stage badges */
+  --color-cold-bg: #eff6ff;
+  --color-cold-text: #3b82f6;
+  --color-warm-bg: #fffbeb;
+  --color-warm-text: #f59e0b;
+  --color-mql-bg: #f5f3ff;
+  --color-mql-text: #7c3aed;
+  --color-hot-bg: #fef2f2;
+  --color-hot-text: #ef4444;
+
+  /* Fonts — families */
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /*
+   * Typography scale (rem @ 16px html)
+   * Use these instead of raw px/rem in components.
+   */
+  --text-2xs: 0.625rem; /* 10px — table micro-headers, rare */
+  --text-xs: 0.6875rem; /* 11px — uppercase labels */
+  --text-sm: 0.75rem; /* 12px — captions, badge, hints */
+  --text-13: 0.8125rem; /* 13px — dense tables, helper text */
+  --text-base: 0.875rem; /* 14px — default UI body */
+  --text-md: 0.9375rem; /* 15px — card titles, large buttons */
+  --text-lg: 1rem; /* 16px — emphasized body */
+  --text-xl: 1.125rem; /* 18px — section headings */
+  --text-2xl: 1.25rem; /* 20px — page section titles */
+  --text-3xl: 1.5rem; /* 24px — stat tiles */
+  --text-4xl: 1.75rem; /* 28px — workspace page title */
+  --text-5xl: 2.25rem; /* 36px — KPI hero value */
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --leading-none: 1;
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.55;
+  --leading-display: 1.1;
+
+  --tracking-tight: -0.02em;
+  --tracking-label: 0.06em;
+  --tracking-label-wide: 0.08em;
+
+  /*
+   * Semantic type roles — compose UI hierarchy consistently
+   * (aliases to the numeric scale above)
+   */
+  --type-page-title-size: var(--text-4xl);
+  --type-page-title-weight: var(--font-weight-bold);
+  --type-section-size: var(--text-2xl);
+  --type-section-weight: var(--font-weight-semibold);
+  --type-subsection-size: var(--text-xl);
+  --type-subsection-weight: var(--font-weight-semibold);
+  --type-card-title-size: var(--text-md);
+  --type-card-title-weight: var(--font-weight-semibold);
+  --type-body-size: var(--text-base);
+  --type-body-weight: var(--font-weight-regular);
+  --type-caption-size: var(--text-sm);
+  --type-meta-size: var(--text-13);
+  --type-label-upper-size: var(--text-xs);
+
+  /* Layout rhythm */
+  --section-gap-md: var(--space-6);
+  --card-padding: var(--space-4);
+  --table-head-bg: var(--color-bg-hover);
+  --table-cell-padding-y: var(--space-3);
+  --table-cell-padding-x: var(--space-4);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Touch targets & form controls */
+  --control-height-xs: 30px;
+  --control-height-sm: 34px;
+  --control-height-md: 36px;
+  --control-height-input: 38px;
+  --control-height-lg: 42px;
+
+  /* Icons (align to 4px grid) */
+  --icon-xs: 16px;
+  --icon-sm: 18px;
+  --icon-md: 20px;
+  --icon-lg: 22px;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Shadow */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-dropdown: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+  /* Sidebar */
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+}

@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
-import { WorkspaceComponent } from './workspace/workspace.component';
+import { dashboardRoute } from './features/dashboard/dashboard.routes';
+import { leadsRoute } from './features/leads/leads.routes';
+import { settingsChildRoutes } from './features/settings/settings.routes';
 
 export const routes: Routes = [
   {
@@ -7,5 +9,9 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./email-capture/email-capture.component').then((m) => m.EmailCaptureComponent)
   },
-  { path: '', component: WorkspaceComponent }
+  { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+  dashboardRoute,
+  leadsRoute,
+  { path: 'settings', children: settingsChildRoutes },
+  { path: '**', redirectTo: 'dashboard' }
 ];

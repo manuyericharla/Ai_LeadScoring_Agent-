@@ -1,200 +1,323 @@
-<main class="container shell-layout">
-  <aside class="side-nav panel">
-    <div class="menu-brand">
-      <div class="brand-dot"></div>
-      <div>
-        <p class="brand-title">LeadScoring</p>
-        <p class="brand-subtitle">Workspace</p>
-      </div>
+<div *ngIf="activeTab === 'dashboard'">
+  <app-workspace-top-bar title="Lead Scoring Dashboard" subtitle="Metrics, charts, and event volume across your pipeline.">
+    <div actions class="dashboard-actions">
+      <app-button variant="secondary" size="sm" type="button" (click)="loadDashboard()" title="Reload metrics from the API">
+        <svg class="btn-ico" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-4.992m0 4.992l-5.04-5.04m-3.678 11.688a6 6 0 11.001-9.192 6 6 0 00-11.196 0 6 6 0 0013.086 3.816" />
+        </svg>
+        Refresh
+      </app-button>
+      <app-button variant="primary" size="sm" type="button" (click)="downloadPdfReport()" title="Export the current leads table to PDF">
+        <svg class="btn-ico" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+        Download PDF Report
+      </app-button>
     </div>
-    <p class="menu-heading">Menu</p>
-    <button class="tab-btn" [ngClass]="{ 'active-tab': activeTab === 'dashboard' }" (click)="setActiveTab('dashboard')">
-      <span class="menu-icon"><img src="/assets/icons/nav-dashboard.png" alt="Dashboard" /></span>
-      <span>Dashboard</span>
-    </button>
-    <button class="tab-btn" [ngClass]="{ 'active-tab': activeTab === 'company-config' }" (click)="setActiveTab('company-config')">
-      <span class="menu-icon"><img src="/assets/icons/nav-company-config.png" alt="Company Config" /></span>
-      <span>Company Config</span>
-    </button>
-    <button class="tab-btn" [ngClass]="{ 'active-tab': activeTab === 'tracking-links' }" (click)="setActiveTab('tracking-links')">
-      <span class="menu-icon menu-icon-letter" aria-hidden="true">Tr</span>
-      <span>Tracking Links</span>
-    </button>
-  </aside>
+  </app-workspace-top-bar>
 
-  <section class="content-area" *ngIf="activeTab === 'dashboard'">
-    <header class="topbar">
-      <div>
-        <h1>Lead Scoring Dashboard</h1>
-        <p class="subtitle">Track leads, import HubSpot exports, and monitor stage movement.</p>
-      </div>
-      <div class="row actions">
-        <button (click)="loadDashboard()">Refresh</button>
-        <button (click)="downloadPdfReport()">Download PDF Report</button>
-      </div>
-    </header>
+  <p class="caption-muted flash" *ngIf="loading">Loading dashboard...</p>
+  <p class="flash flash-error" *ngIf="error">{{ error }}</p>
 
-    <section class="panel">
-      <h2>Import Leads (CSV or XLSX)</h2>
-      <div class="row compact-row">
-        <label for="source">Source</label>
-        <input id="source" [(ngModel)]="source" placeholder="hubspot" />
-        <input type="file" (change)="onFileSelected($event)" accept=".csv,.xlsx" />
-        <button (click)="importLeads()" [disabled]="importing">{{ importing ? 'Importing...' : 'Import' }}</button>
-      </div>
-      <p class="helper-text">Max file size: 10MB • Supported formats: CSV, XLSX</p>
-      <p class="status success" *ngIf="importMessage">{{ importMessage }}</p>
-      <p class="status error" *ngIf="importError">{{ importError }}</p>
-    </section>
+  <ng-container *ngIf="data && !loading">
+    <div class="kpi-grid">
+      <app-card class="kpi-card">
+        <div class="kpi-meta">
+          <span class="muted-lbl">Total Leads</span>
+          <span class="kpi-icon kpi-icon--neutral" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.09 9.09 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.197l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197v-.001M12 12.75V9m0 3.75a5.975 5.975 0 00-5.598-3.75h-.01A5.974 5.974 0 006 9.75v3.75m12 0v-3.75a5.975 5.975 0 00-5.598-3.75h-.01a5.973 5.973 0 00-5.402 3.75" />
+            </svg>
+          </span>
+        </div>
+        <div class="kpi-value">{{ data.totalLeads | number }}</div>
+        <div class="kpi-foot-slot"></div>
+        <app-badge stage="neutral">Pipeline</app-badge>
+      </app-card>
+      <app-card class="kpi-card" [class.kpi-card--dim]="(data.stageCounts.Cold || 0) === 0">
+        <div class="kpi-meta">
+          <span class="muted-lbl">Cold</span>
+          <span class="kpi-icon kpi-icon--cold" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
+            </svg>
+          </span>
+        </div>
+        <div class="kpi-value">{{ data.stageCounts.Cold || 0 | number }}</div>
+        <div class="kpi-foot-slot"></div>
+        <app-badge stage="cold">Cold</app-badge>
+      </app-card>
+      <app-card class="kpi-card" [class.kpi-card--dim]="(data.stageCounts.Warm || 0) === 0">
+        <div class="kpi-meta">
+          <span class="muted-lbl">Warm</span>
+          <span class="kpi-icon kpi-icon--warm" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+            </svg>
+          </span>
+        </div>
+        <div class="kpi-value">{{ data.stageCounts.Warm || 0 | number }}</div>
+        <div class="kpi-foot-slot">
+          @if ((data.stageCounts.Warm || 0) === 0) {
+            <p class="kpi-foot">No warm leads yet</p>
+          }
+        </div>
+        <app-badge stage="warm">Warm</app-badge>
+      </app-card>
+      <app-card class="kpi-card" [class.kpi-card--dim]="(data.stageCounts.Mql || 0) === 0">
+        <div class="kpi-meta">
+          <span class="muted-lbl">MQL</span>
+          <span class="kpi-icon kpi-icon--mql" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-.643m0 0v-3.75a1.5 1.5 0 00-1.5-1.5H20.25a1.5 1.5 0 00-1.5 1.5v3.75m-14.25 0h3.75m-3.75 0h-.007v-.008H6V18z" />
+            </svg>
+          </span>
+        </div>
+        <div class="kpi-value">{{ data.stageCounts.Mql || 0 | number }}</div>
+        <div class="kpi-foot-slot"></div>
+        <app-badge stage="mql">MQL</app-badge>
+      </app-card>
+      <app-card class="kpi-card" [class.kpi-card--dim]="(data.stageCounts.Hot || 0) === 0">
+        <div class="kpi-meta">
+          <span class="muted-lbl">Hot</span>
+          <span class="kpi-icon kpi-icon--hot" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.047 8.287 8.287 0 009 9.601a8.983 8.983 0 013.361-6.867m0 0a3.5 3.5 0 105.018 4.825 1.5 1.5 0 01-.843 1.86v7.014m0 0a3 3 0 105.6 0" />
+            </svg>
+          </span>
+        </div>
+        <div class="kpi-value">{{ data.stageCounts.Hot || 0 | number }}</div>
+        <div class="kpi-foot-slot"></div>
+        <app-badge stage="hot">Hot</app-badge>
+      </app-card>
+    </div>
 
-    <section class="status" *ngIf="loading">Loading dashboard...</section>
-    <section class="status error" *ngIf="error">{{ error }}</section>
+    <div class="dashboard-visuals">
+      <app-card heading="Stage distribution" subheading="Easier to read than a pie when one stage dominates.">
+        <app-stage-pie-chart [stageCounts]="data.stageCounts" />
+      </app-card>
+      <app-card heading="Engagement by channel" subheading="Opens, email clicks, and on-site activity from tracked events.">
+        <app-events-bar-chart [eventsByType]="data.eventsByType" />
+      </app-card>
+    </div>
 
-    <section *ngIf="data && !loading">
-      <div class="cards">
-        <article class="card metric-card">
-          <div class="metric-head">
-            <h3>Total Leads</h3>
-            <img class="metric-icon" src="/assets/icons/total-leads.png" alt="Total leads" />
+    <h2 class="ev-head">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625z"/>
+      </svg>
+      Event volume
+    </h2>
+
+    <div class="ev-grid">
+      <app-card>
+        <div class="ev-tile-row">
+          <div class="ev-icon-sq" style="background: #eff6ff">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="#3b82f6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
+            </svg>
           </div>
-          <p>{{ data.totalLeads | number }}</p>
-        </article>
-        <article class="card metric-card">
-          <div class="metric-head">
-            <h3>Cold</h3>
-            <img class="metric-icon" src="/assets/icons/cold.png" alt="Cold stage" />
+          <div>
+            <div class="ev-tile-lbl">Opens</div>
+            <div class="ev-tile-val" [class.ev-tile-val--zero]="!(data.eventsByType.Open || 0)">{{ data.eventsByType.Open || 0 | number }}</div>
           </div>
-          <p>{{ data.stageCounts.Cold || 0 }}</p>
-        </article>
-        <article class="card metric-card">
-          <div class="metric-head">
-            <h3>Warm</h3>
-            <img class="metric-icon" src="/assets/icons/warm.png" alt="Warm stage" />
+        </div>
+      </app-card>
+      <app-card>
+        <div class="ev-tile-row">
+          <div class="ev-icon-sq" style="background: var(--color-mql-bg)">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="var(--color-mql-text)">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672L13.684 16.337m0 0l-2.286 2.289M13.684 16.337l8.982-8.982a1.125 1.125 0 000-1.591l-1.06-1.06a3.752 3.752 0 00-5.303 5.303l1.677 1.677m-.282 3.738l-.282.282-.282-.282m-.282-.282l.282-.282m0 0L9.982 21.907a2.25 2.25 0 01-3.182 0l-8.982-8.982a3.752 3.752 0 115.303-5.303l8.983 8.982z"/>
+            </svg>
           </div>
-          <p>{{ data.stageCounts.Warm || 0 }}</p>
-        </article>
-        <article class="card metric-card">
-          <div class="metric-head">
-            <h3>MQL</h3>
-            <img class="metric-icon" src="/assets/icons/mql.png" alt="MQL stage" />
+          <div>
+            <div class="ev-tile-lbl">Email clicks</div>
+            <div class="ev-tile-val" [class.ev-tile-val--zero]="!(data.eventsByType.EmailClick || 0)">{{ data.eventsByType.EmailClick || 0 | number }}</div>
           </div>
-          <p>{{ data.stageCounts.Mql || 0 }}</p>
-        </article>
-        <article class="card metric-card">
-          <div class="metric-head">
-            <h3>Hot</h3>
-            <img class="metric-icon" src="/assets/icons/hot.png" alt="Hot stage" />
+        </div>
+      </app-card>
+      <app-card>
+        <div class="ev-tile-row">
+          <div class="ev-icon-sq" style="background: var(--color-primary-light)">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="var(--color-primary)">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"/>
+            </svg>
           </div>
-          <p>{{ data.stageCounts.Hot || 0 }}</p>
-        </article>
-      </div>
+          <div>
+            <div class="ev-tile-lbl">Website activity</div>
+            <div class="ev-tile-val" [class.ev-tile-val--zero]="!(data.eventsByType.WebsiteActivity || 0)">{{ data.eventsByType.WebsiteActivity || 0 | number }}</div>
+          </div>
+        </div>
+      </app-card>
+    </div>
+  </ng-container>
+</div>
 
-      <h2 class="section-title">Event Volume</h2>
-      <div class="cards">
-        <article class="card">
-          <h3>Opens</h3>
-          <p>{{ data.eventsByType.Open || 0 }}</p>
-        </article>
-        <article class="card">
-          <h3>Email Clicks</h3>
-          <p>{{ data.eventsByType.EmailClick || 0 }}</p>
-        </article>
-        <article class="card">
-          <h3>Website Activity</h3>
-          <p>{{ data.eventsByType.WebsiteActivity || 0 }}</p>
-        </article>
-      </div>
+<div *ngIf="activeTab === 'leads'">
+  <app-workspace-top-bar title="Leads" subtitle="Upload spreadsheet exports, label the import source, and browse leads with paging.">
+    <div actions class="pager-buttons">
+      <app-button variant="secondary" size="sm" type="button" (click)="loadDashboard()">Refresh</app-button>
+    </div>
+  </app-workspace-top-bar>
 
-      <h2 class="section-title">Leads</h2>
-      <div class="pagination-bar">
-        <div class="row">
-          <label for="pageSize">Rows per page</label>
-          <select id="pageSize" [(ngModel)]="pageSize" (change)="onPageSizeChange()">
+  <p class="caption-muted flash" *ngIf="loading">Loading leads…</p>
+  <p class="flash flash-error" *ngIf="error">{{ error }}</p>
+
+  <ng-container *ngIf="data && !loading">
+    <app-card heading="Import Leads">
+      <div class="import-row">
+        <div class="import-source">
+          <app-input label="Source" [(ngModel)]="source" name="leadsSource" placeholder="e.g. crm_export, partner_list" />
+        </div>
+        <div class="import-actions">
+          <input id="leadsLeadFile" class="file-hidden" type="file" accept=".csv,.xlsx" (change)="onFileSelected($event)" />
+          <label class="file-drop-lbl" for="leadsLeadFile">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3.75 3.75 0 013.75 3.782c0 .033 0-.033 0-.033V18.75"/>
+            </svg>
+            Choose CSV or XLSX
+          </label>
+          <app-button variant="primary" type="button" [loading]="importing" [disabled]="importing" (click)="importLeads()">
+            Import
+          </app-button>
+        </div>
+      </div>
+      <p class="caption-muted">Max file size: 10MB · Supported formats: CSV, XLSX</p>
+      <p class="flash flash-success" *ngIf="importMessage">{{ importMessage }}</p>
+      <p class="flash flash-error" *ngIf="importError">{{ importError }}</p>
+    </app-card>
+
+    <div class="leads-head-row">
+      <h2>Leads</h2>
+      <div class="pager-strip">
+        <div class="rows-wrap">
+          <span>Rows per page</span>
+          <select id="pageSizeLeads" class="ws-select" [(ngModel)]="pageSize" (change)="onPageSizeChange()" name="pageSzLeads">
             <option [ngValue]="10">10</option>
             <option [ngValue]="25">25</option>
             <option [ngValue]="50">50</option>
           </select>
         </div>
-        <div class="row">
-          <button (click)="previousPage()" [disabled]="currentPage === 1">Previous</button>
-          <span class="page-indicator">Page {{ currentPage }} of {{ totalPages }}</span>
-          <button (click)="nextPage()" [disabled]="currentPage === totalPages">Next</button>
+        <div class="pager-buttons">
+          <app-button variant="secondary" size="sm" type="button" (click)="previousPage()" [disabled]="currentPage === 1">Previous</app-button>
+          <span class="page-of">Page {{ currentPage }} of {{ totalPages }}</span>
+          <app-button variant="primary" size="sm" type="button" (click)="nextPage()" [disabled]="currentPage === totalPages">Next</app-button>
         </div>
       </div>
-      <div class="table-wrap">
-        <table>
+    </div>
+
+    <div class="leads-table-panel">
+      <app-table>
+        <table class="leads-table">
           <thead>
             <tr>
-              <th>Email</th>
-              <th>Score</th>
-              <th>Stage</th>
-              <th>Last Activity</th>
-              <th>Last Event</th>
-              <th>Last Email Name</th>
-              <th>Next Email Name</th>
-              <th>Next Date & Time</th>
-              <th>Next Stage</th>
-              <th>Signup Completed</th>
-              <th>Profile Completion</th>
-              <th>Selected Plan</th>
-              <th>Plan Renewal Date</th>
+              <th scope="col">Email</th>
+              <th scope="col">Score</th>
+              <th scope="col">Stage</th>
+              <th scope="col">Last activity</th>
+              <th scope="col">Last event</th>
+              <th scope="col">Next date</th>
+              <th scope="col">Last email</th>
+              <th scope="col">Next email</th>
+              <th scope="col">Next stage</th>
+              <th scope="col" class="lt-th-icon" title="Signup completed">Signup</th>
+              <th scope="col" class="lt-th-icon" title="Profile completion">Profile</th>
+              <th scope="col">Plan</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let lead of paginatedLeads">
-              <td>{{ lead.email }}</td>
-              <td>{{ lead.score }}</td>
-              <td [ngClass]="getStageClass(lead.stage)">{{ lead.stage }}</td>
-              <td>{{ lead.lastActivityUtc | date: 'short' }}</td>
-              <td>{{ lead.lastEvent || '-' }}</td>
-              <td>{{ lead.lastEmailName || '-' }}</td>
-              <td>{{ lead.nextEmailName || '-' }}</td>
-              <td>{{ lead.nextDateTimeUtc ? (lead.nextDateTimeUtc | date: 'short') : '-' }}</td>
-              <td [ngClass]="getStageClass(lead.nextStage)">{{ lead.nextStage }}</td>
-              <td>{{ lead.signupCompleted ? 'true' : 'false' }}</td>
-              <td>{{ lead.profileCompletion ? 'true' : 'false' }}</td>
-              <td>{{ lead.profileCompletion ? (lead.selectedPlan || '-') : '-' }}</td>
-              <td>{{ lead.profileCompletion && lead.planRenewalDate ? (lead.planRenewalDate | date: 'short') : '-' }}</td>
+              <td class="cell-email lt-cell-email-full" [attr.title]="lead.email">{{ lead.email }}</td>
+              <td class="lt-td-badge">
+                <app-badge [score]="lead.score">{{ lead.score }}</app-badge>
+              </td>
+              <td class="lt-td-badge">
+                <app-badge [stage]="stageBadge(lead.stage)">{{ lead.stage }}</app-badge>
+              </td>
+              <td class="cell-muted leads-cell-dt" [attr.title]="lead.lastActivityUtc ? (lead.lastActivityUtc | date: 'medium') : ''">
+                {{ lead.lastActivityUtc | date: 'MM/dd/yy, HH:mm' }}
+              </td>
+              <td class="cell-muted leads-cell-ellipsis leads-cell-muted-long" [attr.title]="lead.lastEvent || ''">{{ lead.lastEvent || '—' }}</td>
+              <td class="cell-muted leads-cell-dt" [attr.title]="lead.nextDateTimeUtc ? (lead.nextDateTimeUtc | date: 'medium') : ''">
+                {{ lead.nextDateTimeUtc ? (lead.nextDateTimeUtc | date: 'MM/dd/yy, HH:mm') : '—' }}
+              </td>
+              <td class="cell-body-sm leads-cell-ellipsis" [attr.title]="lead.lastEmailName || ''">{{ lead.lastEmailName || '—' }}</td>
+              <td class="cell-body-sm leads-cell-ellipsis" [attr.title]="lead.nextEmailName || ''">{{ lead.nextEmailName || '—' }}</td>
+              <td class="lt-td-badge">
+                <app-badge [stage]="stageBadge(lead.nextStage)">{{ lead.nextStage }}</app-badge>
+              </td>
+              <td class="icon-col lt-icon-cell">
+                <svg *ngIf="lead.signupCompleted" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20" fill="#22BD52" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/>
+                </svg>
+                <svg *ngIf="!lead.signupCompleted" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#94a3b8" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" d="M18 12H6"/>
+                </svg>
+              </td>
+              <td class="icon-col lt-icon-cell">
+                <svg *ngIf="lead.profileCompletion" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20" fill="#22BD52" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/>
+                </svg>
+                <svg *ngIf="!lead.profileCompletion" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#94a3b8" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" d="M18 12H6"/>
+                </svg>
+              </td>
+              <td class="cell-body-sm leads-cell-ellipsis" [attr.title]="lead.profileCompletion ? (lead.selectedPlan || '') : ''">
+                {{ lead.profileCompletion ? (lead.selectedPlan || '—') : '—' }}
+              </td>
             </tr>
           </tbody>
         </table>
-      </div>
-      <p class="status">Showing {{ paginatedLeads.length }} of {{ totalLeads }} leads</p>
-    </section>
-  </section>
+      </app-table>
+    </div>
 
-  <section class="content-area" *ngIf="activeTab === 'company-config'">
-    <header class="topbar">
-      <div>
-        <h1>Company Config</h1>
-        <p class="subtitle">Create product event-score mapping for each company.</p>
-      </div>
-    </header>
+    <p class="leads-foot-note">Showing {{ paginatedLeads.length }} of {{ totalLeads }} leads</p>
+  </ng-container>
+</div>
 
-    <section class="panel">
-      <h2>Company Product Config</h2>
-      <p class="status" *ngIf="editingConfigId">Editing existing config. You can add/remove items and update scores.</p>
-      <div class="config-grid">
-        <div class="row">
-          <label for="companyName">Company Name</label>
-          <input id="companyName" [(ngModel)]="companyProductForm.companyName" placeholder="Scadea.com" />
-        </div>
-        <div class="row">
-          <label for="productName">Product Name</label>
-          <input id="productName" [(ngModel)]="companyProductForm.productName" placeholder="Hiperbrains.com" />
-        </div>
-        <div class="row">
-          <label for="productId">Product ID</label>
-          <input id="productId" type="number" min="1" [(ngModel)]="companyProductForm.productId" />
-        </div>
-      </div>
+<div *ngIf="activeTab === 'company-config'">
+  <app-workspace-top-bar title="Company Config" subtitle="Create product event-score mapping for each company." />
 
-      <h3 class="subheading">Product Event Config (Event -> Score)</h3>
-      <div class="table-wrap">
+  <app-card heading="Company Product Config">
+    <div class="info-banner">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+      </svg>
+      <div class="info-banner__text">
+        <p class="info-banner__title">How to add a company product config</p>
+        <p class="info-banner__body">
+          Pick <strong>company</strong> and <strong>product</strong> (choose from the lists or type a new name). Add each funnel event you care about—like “Pricing page” or “Book demo”—and give it a score of <strong>0 or higher</strong>. Submit to save; your configs show up in the <strong>list below</strong>, where you can filter or edit.
+        </p>
+      </div>
+    </div>
+    <p class="hint-msg" *ngIf="editingConfigId">Editing existing config — add/remove items and update scores.</p>
+    <div class="config-form-grid">
+      <app-combobox
+        label="Company Name"
+        [required]="true"
+        name="ccfCompany"
+        placeholder="Choose company"
+        [(ngModel)]="companyProductForm.companyName"
+        [options]="distinctCompanyNames"
+      />
+      <app-combobox
+        label="Product Name"
+        [required]="true"
+        name="ccfProduct"
+        placeholder="Choose product"
+        [(ngModel)]="companyProductForm.productName"
+        [options]="productsForSelectedCompany"
+      />
+    </div>
+    <div class="event-config-section">
+      <h3 class="subsection-title">Product Event Config (Event → Score)</h3>
+      <p class="event-config-hint caption-muted">
+        Add events and a score each (0 or greater). Every row with an event name must have a score before you submit.
+      </p>
+      <app-table>
         <table>
           <thead>
             <tr>
-              <th>Event Name</th>
+              <th>Event name</th>
               <th>Score</th>
               <th>Action</th>
             </tr>
@@ -202,146 +325,179 @@
           <tbody>
             <tr *ngFor="let item of companyProductForm.items; let i = index">
               <td>
-                <input [(ngModel)]="item.eventName" placeholder="Pricing page / Book demo / Signup" />
+                <app-input label="" [(ngModel)]="item.eventName" [name]="'evn' + i" placeholder="Pricing page / Book demo / Sign up..." />
+              </td>
+              <td style="max-width: 120px">
+                <app-input
+                  type="number"
+                  [min]="0"
+                  label=""
+                  placeholder="e.g. 10"
+                  [(ngModel)]="item.score"
+                  [name]="'evs' + i"
+                  [inputStyle]="{ width: '100%', maxWidth: '100px' }"
+                />
               </td>
               <td>
-                <input type="number" min="0" [(ngModel)]="item.score" />
-              </td>
-              <td>
-                <button (click)="removeEventItem(i)" [disabled]="companyProductForm.items.length === 1">Remove</button>
+                <app-button variant="danger" size="sm" type="button" (click)="removeEventItem(i)" [disabled]="companyProductForm.items.length === 1">
+                  Remove
+                </app-button>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+        <div class="event-score-table-toolbar">
+          <app-button variant="secondary" type="button" (click)="addEventItem()">+ Add Item</app-button>
+        </div>
+      </app-table>
+    </div>
+    <div class="config-actions">
+      <app-button variant="primary" type="button" (click)="saveCompanyConfig()" [loading]="savingConfig" [disabled]="savingConfig">
+        {{ editingConfigId ? 'Update Config' : 'Submit Config' }}
+      </app-button>
+      <app-button *ngIf="editingConfigId" variant="ghost" type="button" [disabled]="savingConfig" (click)="cancelCompanyConfigEdit()">Cancel edit</app-button>
+    </div>
+    <p class="flash flash-success" *ngIf="configSuccess">{{ configSuccess }}</p>
+    <p class="flash flash-error" *ngIf="configError">{{ configError }}</p>
+  </app-card>
 
-      <div class="row actions-row">
-        <button (click)="addEventItem()">Add Item</button>
-        <button (click)="saveCompanyConfig()" [disabled]="savingConfig">
-          {{ savingConfig ? 'Saving...' : (editingConfigId ? 'Update Config' : 'Submit Config') }}
-        </button>
-        <button *ngIf="editingConfigId" (click)="cancelCompanyConfigEdit()" [disabled]="savingConfig">Cancel Edit</button>
-      </div>
-      <p class="status success" *ngIf="configSuccess">{{ configSuccess }}</p>
-      <p class="status error" *ngIf="configError">{{ configError }}</p>
-    </section>
+  <app-card heading="Company Product Config List">
+    <div class="filter-inline">
+      <app-input placeholder="Filter by company..." [(ngModel)]="companyNameFilter" name="compFilterInp" />
+      <app-button variant="primary" size="sm" type="button" (click)="loadCompanyConfigs()">Apply Filter</app-button>
+    </div>
+    <p class="caption-muted" *ngIf="configLoading">Loading configurations…</p>
+    <app-table *ngIf="!configLoading && companyConfigs.length > 0">
+      <table>
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Product</th>
+            <th>Event config</th>
+            <th>Created</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let config of companyConfigs">
+            <td class="cell-body-sm">{{ config.companyName }}</td>
+            <td class="cell-body-sm">{{ config.productName }}</td>
+            <td>
+              @let evs = eventConfigEntries(config.productEventConfig);
+              @if (evs.length > 0) {
+                <div class="config-list-badges">
+                  @for (evt of evs; track evt.key) {
+                    <app-badge [score]="evt.value">{{ evt.key }}: {{ evt.value }}</app-badge>
+                  }
+                </div>
+              } @else {
+                <span class="config-list-events-empty">—</span>
+              }
+            </td>
+            <td class="cell-muted">{{ config.createdAtUtc | date: 'MMM d, y, h:mm a' }}</td>
+            <td>
+              <app-button variant="secondary" size="sm" type="button" (click)="editCompanyConfig(config)">Edit</app-button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </app-table>
 
-    <section class="panel">
-      <h2>Company Product Config List</h2>
-      <div class="row">
-        <label for="companyFilter">Filter by Company</label>
-        <input id="companyFilter" [(ngModel)]="companyNameFilter" placeholder="Scadea.com" />
-        <button (click)="loadCompanyConfigs()">Apply Filter</button>
-      </div>
-      <p class="status" *ngIf="configLoading">Loading configs...</p>
-      <div class="table-wrap" *ngIf="!configLoading">
-        <table>
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Product</th>
-              <th>Product ID</th>
-              <th>Event Config</th>
-              <th>Created</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let config of companyConfigs">
-              <td>{{ config.companyName }}</td>
-              <td>{{ config.productName }}</td>
-              <td>{{ config.productId }}</td>
-              <td>
-                <span class="event-chip" *ngFor="let event of eventConfigEntries(config.productEventConfig)">
-                  {{ event.key }}: {{ event.value }}
-                </span>
-              </td>
-              <td>{{ config.createdAtUtc | date: 'short' }}</td>
-              <td><button (click)="editCompanyConfig(config)">Edit</button></td>
-            </tr>
-            <tr *ngIf="companyConfigs.length === 0">
-              <td colspan="6">No company configs found.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </section>
+    <div class="empty-state" *ngIf="!configLoading && companyConfigs.length === 0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.25">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 9v-.375a6.751 6.751 0 011.5 13.369V15M6.713 21.713a15.971 15.971 0 002.086-13.089L15 21M21.75 9a3.752 3.752 0 00-7.538-5.659M21.75 9a3.752 3.752 0 01-7.538-5.659M21.75 9a3 3 0 00-6 0M6.713 21.713a17.986 17.986 0 01-12.049-15.659M6.713 21.713L6 21"/>
+      </svg>
+      <strong>No configurations yet</strong>
+      <p>Add your first product config above</p>
+    </div>
+  </app-card>
+</div>
 
-  <section class="content-area" *ngIf="activeTab === 'tracking-links'">
-    <header class="topbar">
-      <div>
-        <h1>Tracking Links</h1>
-        <p class="subtitle">
-          Define where clicks should land, then copy the link for LinkedIn and other channels. Each hit stores an anonymous visitor id plus browser and network signals when available.
+<div *ngIf="activeTab === 'tracking-links'">
+  <app-workspace-top-bar
+    title="Tracking Links"
+    subtitle="Set your landing page and server, then copy one link for LinkedIn, ads, and other channels."
+  />
+
+  <app-card heading="Universal Tracking URL">
+    <div class="info-banner">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+      </svg>
+      <div class="info-banner__text">
+        <p class="info-banner__title">How this link works</p>
+        <p class="info-banner__body">
+          Clicks hit your server at <code>/r</code> first (so you capture the campaign and source), then visitors are redirected to your site. No shared cookies across domains—just the parameters in the URL.
         </p>
       </div>
-    </header>
+    </div>
 
-    <section class="panel tracking-links-panel">
-      <h2>Universal tracking URL</h2>
-      <p class="helper-text">
-        Uses API route <code class="inline-code">GET /r</code>: records the click (visitor cookie on the tracking host, optional campaign), then redirects with
-        <code class="inline-code">ls_src</code> and <code class="inline-code">utm_source</code> on the destination URL so your site can attribute traffic across origins (cookies do not carry from the tracker to another host/port).
-        Personal details (name, email) are only captured later when that visitor submits a form that identifies them.
-      </p>
+    <div class="tracking-grid">
+      <app-input label="Redirect destination" [(ngModel)]="universalLinkRedirect" name="ulRedir" placeholder="http://localhost:5173/" [fullWidth]="true" />
 
-      <div class="config-grid tracking-links-grid">
-        <div class="row row-full tracking-redirect-row">
-          <label for="universalLinkRedirect">Redirect destination</label>
-          <input
-            id="universalLinkRedirect"
-            [(ngModel)]="universalLinkRedirect"
-            placeholder="https://your-site.com/landing?utm_source=linkedin"
-            autocapitalize="off"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <p class="helper-text subtle" *ngIf="universalRedirectValidation === 'empty'">
-            Optional: leave blank to use the API default landing URL (<code class="inline-code">Tracking:DefaultRedirectUrl</code>).
-          </p>
-          <p class="status error compact-msg" *ngIf="universalRedirectValidation === 'invalid'">
-            Enter a valid absolute URL starting with http:// or https://
-          </p>
-        </div>
-        <div class="row">
-          <label for="trackingBaseUrl">Tracking server base URL</label>
-          <input
-            id="trackingBaseUrl"
-            [(ngModel)]="trackingBaseUrl"
-            (ngModelChange)="persistTrackingBaseUrl()"
-            placeholder="http://localhost:8211"
-          />
-        </div>
-        <div class="row">
-          <label for="universalLinkSource">Source (<code class="inline-code">src</code>)</label>
-          <select id="universalLinkSource" [(ngModel)]="universalLinkSource">
-            <option value="linkedin">LinkedIn</option>
-            <option value="email">Email</option>
-            <option value="website">Website</option>
-            <option value="direct">Direct</option>
-            <option value="organic">Organic</option>
-          </select>
-        </div>
-        <div class="row">
-          <label for="universalLinkCampaign">Campaign (optional)</label>
-          <input id="universalLinkCampaign" [(ngModel)]="universalLinkCampaign" placeholder="spring_launch" />
-        </div>
+      @if (universalRedirectValidation === 'empty') {
+        <p class="hint-msg">Optional: leave blank to use the API default redirect.</p>
+      }
+      @if (universalRedirectValidation === 'invalid') {
+        <p class="invalid-msg">Enter a valid absolute URL starting with http:// or https://.</p>
+      }
+
+      <div class="tracking-row-3">
+        <app-input
+          label="Tracking server base URL"
+          [ngModel]="trackingBaseUrl"
+          (ngModelChange)="onTrackingBaseUrlChange($event)"
+          name="trackingBaseUrl"
+          placeholder="http://localhost:5221/"
+        />
+        <app-combobox
+          label="Source (src)"
+          name="uniSrc"
+          placeholder="Choose source"
+          [(ngModel)]="universalLinkSource"
+          [options]="trackingSourceOptions"
+          [allowCustomValue]="false"
+        />
+        <app-input label="Campaign (optional)" [(ngModel)]="universalLinkCampaign" name="uniCmp" placeholder="spring_launch" />
       </div>
+    </div>
 
-      <div class="tracking-link-preview">
-        <label for="builtUniversalLink">Generated link — copy for your post or ad</label>
-        <textarea id="builtUniversalLink" class="tracking-link-field" readonly rows="4" [value]="builtUniversalTrackingLink"></textarea>
-        <div class="row actions-row tracking-link-actions">
-          <button type="button" (click)="copyUniversalTrackingLink()" [disabled]="!canCopyOrTestUniversalLink">
-            Copy link
-          </button>
-          <button type="button" class="secondary-btn" (click)="openUniversalTrackingLinkTest()" [disabled]="!canCopyOrTestUniversalLink">
-            Open test (new tab)
-          </button>
-        </div>
-        <p class="status success" *ngIf="trackingLinkCopyStatus">{{ trackingLinkCopyStatus }}</p>
+    <div class="link-preview-section">
+      <label class="link-preview-lbl" for="builtUniversalLink">Generated link</label>
+      <p class="link-preview-hint">Updates as you edit the fields above. Copy this into LinkedIn, ads, or email.</p>
+      <textarea
+        id="builtUniversalLink"
+        class="link-textarea link-textarea--compact"
+        readonly
+        rows="2"
+        spellcheck="false"
+        autocomplete="off"
+        [value]="builtUniversalTrackingLink"
+      ></textarea>
+      <div class="tracking-actions">
+        <app-button variant="primary" type="button" [disabled]="!canCopyOrTestUniversalLink" (click)="copyUniversalTrackingLink()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0117.638 18H18a2.25 2.25 0 002.25-2.25V6.108c0-1.898-.962-3.693-2.579-4.743M13.638 21H15a2.25 2.25 0 002.25-2.25v-11.94a2.25 2.25 0 00-6.086-6.086L11.538 21M4.938 21H13.638a2.25 2.25 0 01-3.069-4.069L21 5.938"/>
+          </svg>
+          Copy Link
+        </app-button>
+        <app-button variant="secondary" type="button" [disabled]="!canCopyOrTestUniversalLink" (click)="openUniversalTrackingLinkTest()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6h10.5m0-13.5L18 21"/>
+          </svg>
+          Open Test
+        </app-button>
+
+        @if (linkCopiedFlash) {
+          <span class="copied-inline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/>
+            </svg>
+            Copied to clipboard
+          </span>
+        }
       </div>
-    </section>
-  </section>
-</main>
+      <p class="invalid-msg" *ngIf="trackingLinkCopyStatus && !linkCopiedFlash">{{ trackingLinkCopyStatus }}</p>
+    </div>
+  </app-card>
+</div>

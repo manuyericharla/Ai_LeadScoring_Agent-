@@ -1,26 +1,55 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { DecimalPipe, DatePipe, NgClass, NgFor, NgIf } from '@angular/common';
+import { DecimalPipe, DatePipe, NgFor, NgIf } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
+import { filter } from 'rxjs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { AppBadgeComponent } from '../shared/components/badge/app-badge.component';
+import { AppButtonComponent } from '../shared/components/button/app-button.component';
+import { AppCardComponent } from '../shared/components/card/app-card.component';
+import { AppComboboxComponent } from '../shared/components/combobox/app-combobox.component';
+import { AppInputComponent } from '../shared/components/input/app-input.component';
+import { AppTableComponent } from '../shared/components/table/app-table.component';
+import { EventsBarChartComponent } from '../shared/components/dashboard-charts/events-bar-chart.component';
+import { StagePieChartComponent } from '../shared/components/dashboard-charts/stage-pie-chart.component';
+import { WorkspaceTopBarComponent } from './workspace-top-bar/workspace-top-bar.component';
 
 @Component({
   selector: 'app-workspace',
   standalone: true,
-  imports: [DecimalPipe, DatePipe, NgIf, NgFor, NgClass, FormsModule],
+  imports: [
+    DecimalPipe,
+    DatePipe,
+    NgIf,
+    NgFor,
+    FormsModule,
+    AppBadgeComponent,
+    AppButtonComponent,
+    AppCardComponent,
+    AppComboboxComponent,
+    AppInputComponent,
+    AppTableComponent,
+    EventsBarChartComponent,
+    StagePieChartComponent,
+    WorkspaceTopBarComponent
+  ],
   templateUrl: './workspace.component.html',
-  styleUrl: './workspace.component.css'
+  styleUrl: './workspace.component.scss'
 })
 export class WorkspaceComponent implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly trackingBaseStorageKey = 'leadScoring.trackingBaseUrl';
+  private copyFlashTimer?: ReturnType<typeof setTimeout>;
   apiBase = this.resolveApiBase();
   loading = false;
   error = '';
   data?: DashboardResponse;
   selectedFile?: File;
-  source = 'hubspot';
+  source = '';
   importMessage = '';
   importError = '';
   importing = false;
@@ -28,12 +57,17 @@ export class WorkspaceComponent implements OnInit {
   currentPage = 1;
   activeTab: LeftTab = 'dashboard';
   trackingBaseUrl = this.resolveTrackingBase();
-  universalLinkSource = 'linkedin';
+  /** Labels for Universal URL `src`; stored value matches option text; URL uses lowercase. */
+  readonly trackingSourceOptions = ['LinkedIn', 'Twitter', 'Facebook', 'Google', 'Other'];
+  universalLinkSource = '';
   universalLinkCampaign = '';
   universalLinkRedirect = '';
   trackingLinkCopyStatus = '';
+  linkCopiedFlash = false;
   companyNameFilter = '';
   companyConfigs: CompanyProductConfig[] = [];
+  /** Unfiltered list for combobox suggestions (unaffected by table filter). */
+  companyProductAll: CompanyProductConfig[] = [];
   configLoading = false;
   configError = '';
   configSuccess = '';
@@ -42,26 +76,85 @@ export class WorkspaceComponent implements OnInit {
   companyProductForm: CompanyProductForm = {
     companyName: '',
     productName: '',
-    productId: 1,
-    items: [{ eventName: '', score: 0 }]
+    items: [{ eventName: '', score: '' }]
   };
+
+  /** Unique company names from saved configs (datalist suggestions). */
+  get distinctCompanyNames(): string[] {
+    const set = new Set<string>();
+    for (const c of this.companyProductAll) {
+      const n = c.companyName?.trim();
+      if (n) {
+        set.add(n);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  /** Product names for the typed/selected company (trimmed names, case-insensitive). */
+  get productsForSelectedCompany(): string[] {
+    const target = this.companyProductForm.companyName.trim().toLowerCase();
+    if (!target) {
+      return [];
+    }
+    const set = new Set<string>();
+    for (const c of this.companyProductAll) {
+      if (c.companyName.trim().toLowerCase() === target) {
+        const p = c.productName?.trim();
+        if (p) {
+          set.add(p);
+        }
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
 
   ngOnInit(): void {
     const savedBase = typeof localStorage !== 'undefined' ? localStorage.getItem(this.trackingBaseStorageKey)?.trim() : '';
     if (savedBase) {
       this.trackingBaseUrl = savedBase;
     }
+    this.syncTabFromRoute();
+    this.router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd)).subscribe(() => this.syncTabFromRoute());
     this.loadDashboard();
     this.loadCompanyConfigs();
+    this.refreshCompanyProductIndex();
   }
 
-  setActiveTab(tab: LeftTab): void {
+  /** Maps API stage enums to badge token keys (CSS classes). */
+  stageBadge(stage: StageName): 'cold' | 'warm' | 'mql' | 'hot' {
+    switch (stage) {
+      case 'Cold':
+        return 'cold';
+      case 'Warm':
+        return 'warm';
+      case 'Mql':
+        return 'mql';
+      case 'Hot':
+        return 'hot';
+      default:
+        return 'cold';
+    }
+  }
+
+  private syncTabFromRoute(): void {
+    let r: ActivatedRoute | null = this.route;
+    while (r?.firstChild) {
+      r = r.firstChild;
+    }
+    const tab = r?.snapshot.data['workspaceTab'] as LeftTab | undefined;
+    if (!tab || tab === this.activeTab) {
+      return;
+    }
     this.activeTab = tab;
-    if (tab === 'dashboard' && !this.data && !this.loading) {
+    if ((tab === 'dashboard' || tab === 'leads') && !this.data && !this.loading) {
       this.loadDashboard();
     }
     if (tab === 'company-config' && this.companyConfigs.length === 0 && !this.configLoading) {
       this.loadCompanyConfigs();
+    }
+    if (tab === 'company-config') {
+      this.refreshCompanyProductIndex();
     }
   }
 
@@ -72,7 +165,10 @@ export class WorkspaceComponent implements OnInit {
     }
 
     const params = new URLSearchParams();
-    params.set('src', this.universalLinkSource.trim().toLowerCase() || 'linkedin');
+    const src = this.universalLinkSource.trim().toLowerCase();
+    if (src) {
+      params.set('src', src);
+    }
     const cmp = this.universalLinkCampaign.trim();
     if (cmp) {
       params.set('cmp', cmp);
@@ -83,7 +179,8 @@ export class WorkspaceComponent implements OnInit {
       params.set('redirect', redirect);
     }
 
-    return `${base}/r?${params.toString()}`;
+    const q = params.toString();
+    return q ? `${base}/r?${q}` : `${base}/r`;
   }
 
   /** Empty uses API default redirect; invalid blocks copy/test. */
@@ -108,6 +205,11 @@ export class WorkspaceComponent implements OnInit {
     return !!url && this.universalRedirectValidation !== 'invalid';
   }
 
+  onTrackingBaseUrlChange(value: unknown): void {
+    this.trackingBaseUrl = String(value ?? '');
+    this.persistTrackingBaseUrl();
+  }
+
   persistTrackingBaseUrl(): void {
     const v = this.trackingBaseUrl.trim();
     if (typeof localStorage !== 'undefined') {
@@ -121,6 +223,8 @@ export class WorkspaceComponent implements OnInit {
 
   async copyUniversalTrackingLink(): Promise<void> {
     this.trackingLinkCopyStatus = '';
+    this.linkCopiedFlash = false;
+    clearTimeout(this.copyFlashTimer);
     const url = this.builtUniversalTrackingLink;
     if (!url) {
       this.trackingLinkCopyStatus = 'Set the tracking server URL first.';
@@ -131,9 +235,14 @@ export class WorkspaceComponent implements OnInit {
       return;
     }
 
+    const flashCopied = (): void => {
+      this.linkCopiedFlash = true;
+      this.copyFlashTimer = setTimeout(() => (this.linkCopiedFlash = false), 2000);
+    };
+
     try {
       await navigator.clipboard.writeText(url);
-      this.trackingLinkCopyStatus = 'Copied to clipboard.';
+      flashCopied();
       return;
     } catch {
       /* fallback below */
@@ -146,7 +255,11 @@ export class WorkspaceComponent implements OnInit {
       ta.setSelectionRange(0, ta.value.length);
       try {
         const legacyOk = document.execCommand('copy');
-        this.trackingLinkCopyStatus = legacyOk ? 'Copied to clipboard.' : 'Select the link above and press Ctrl+C.';
+        if (legacyOk) {
+          flashCopied();
+          return;
+        }
+        this.trackingLinkCopyStatus = 'Select the link above and press Ctrl+C.';
       } catch {
         this.trackingLinkCopyStatus = 'Select the link above and press Ctrl+C.';
       }
@@ -194,9 +307,15 @@ export class WorkspaceComponent implements OnInit {
       return;
     }
 
+    const src = this.source.trim();
+    if (!src) {
+      this.importError = 'Enter an import source label (how you refer to this file or vendor).';
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', this.selectedFile);
-    formData.append('source', this.source.trim() || 'external');
+    formData.append('source', src);
 
     this.importing = true;
     this.http.post<LeadImportResult>(`${this.apiBase}/api/leads/import-file`, formData).subscribe({
@@ -243,21 +362,6 @@ export class WorkspaceComponent implements OnInit {
 
   onPageSizeChange(): void {
     this.currentPage = 1;
-  }
-
-  getStageClass(stage: StageName): string {
-    switch (stage) {
-      case 'Cold':
-        return 'stage-cold';
-      case 'Warm':
-        return 'stage-warm';
-      case 'Mql':
-        return 'stage-mql';
-      case 'Hot':
-        return 'stage-hot';
-      default:
-        return '';
-    }
   }
 
   downloadPdfReport(): void {
@@ -316,7 +420,7 @@ export class WorkspaceComponent implements OnInit {
   }
 
   addEventItem(): void {
-    this.companyProductForm.items.push({ eventName: '', score: 0 });
+    this.companyProductForm.items.push({ eventName: '', score: '' });
   }
 
   removeEventItem(index: number): void {
@@ -333,17 +437,27 @@ export class WorkspaceComponent implements OnInit {
 
     const companyName = this.companyProductForm.companyName.trim();
     const productName = this.companyProductForm.productName.trim();
-    if (!companyName || !productName || this.companyProductForm.productId <= 0) {
-      this.configError = 'Company name, product name, and Product ID are required.';
+    if (!companyName || !productName) {
+      this.configError = 'Company name and product name are required.';
       return;
     }
 
-    const eventPairs = this.companyProductForm.items
-      .map((x) => ({ eventName: x.eventName.trim(), score: Number(x.score) }))
-      .filter((x) => x.eventName.length > 0);
+    const eventPairs: { eventName: string; score: number }[] = [];
+    for (const item of this.companyProductForm.items) {
+      const eventName = item.eventName.trim();
+      if (!eventName) {
+        continue;
+      }
+      const num = item.score === '' ? NaN : Number(item.score);
+      if (!Number.isFinite(num) || num < 0) {
+        this.configError = 'Enter a score (0 or greater) for each event that has a name.';
+        return;
+      }
+      eventPairs.push({ eventName, score: num });
+    }
 
     if (eventPairs.length === 0) {
-      this.configError = 'Add at least one event item with score.';
+      this.configError = 'Add at least one event with a name and score.';
       return;
     }
 
@@ -355,7 +469,6 @@ export class WorkspaceComponent implements OnInit {
     const payload: UpsertCompanyProductConfigRequest = {
       companyName,
       productName,
-      productId: Number(this.companyProductForm.productId),
       productEventConfig
     };
 
@@ -371,6 +484,7 @@ export class WorkspaceComponent implements OnInit {
         this.resetCompanyConfigForm(companyName);
         this.companyNameFilter = companyName;
         this.loadCompanyConfigs();
+        this.refreshCompanyProductIndex();
       },
       error: () => {
         this.savingConfig = false;
@@ -386,7 +500,6 @@ export class WorkspaceComponent implements OnInit {
     this.companyProductForm = {
       companyName: config.companyName,
       productName: config.productName,
-      productId: config.productId,
       items: this.eventConfigEntries(config.productEventConfig).map((x) => ({
         eventName: x.key,
         score: x.value
@@ -428,9 +541,20 @@ export class WorkspaceComponent implements OnInit {
     this.companyProductForm = {
       companyName: defaultCompanyName,
       productName: '',
-      productId: 1,
-      items: [{ eventName: '', score: 0 }]
+      items: [{ eventName: '', score: '' }]
     };
+  }
+
+  /** Full config list for combobox suggestions (unaffected by table filter). */
+  private refreshCompanyProductIndex(): void {
+    this.http.get<CompanyProductConfig[]>(`${this.apiBase}/api/company-product-configs`).subscribe({
+      next: (rows) => {
+        this.companyProductAll = rows;
+      },
+      error: () => {
+        /* keep previous suggestions on failure */
+      }
+    });
   }
 
   private resolveTrackingBase(): string {
@@ -518,19 +642,17 @@ interface LeadImportResult {
 interface CompanyProductForm {
   companyName: string;
   productName: string;
-  productId: number;
   items: CompanyProductEventItem[];
 }
 
 interface CompanyProductEventItem {
   eventName: string;
-  score: number;
+  score: number | '';
 }
 
 interface UpsertCompanyProductConfigRequest {
   companyName: string;
   productName: string;
-  productId: number;
   productEventConfig: Record<string, number>;
 }
 
@@ -543,4 +665,4 @@ interface CompanyProductConfig {
   createdAtUtc: string;
 }
 
-type LeftTab = 'dashboard' | 'company-config' | 'tracking-links';
+type LeftTab = 'dashboard' | 'leads' | 'company-config' | 'tracking-links';

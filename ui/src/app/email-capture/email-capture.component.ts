@@ -17,7 +17,7 @@ import { firstValueFrom } from 'rxjs';
   standalone: true,
   imports: [FormsModule, NgIf],
   templateUrl: './email-capture.component.html',
-  styleUrl: './email-capture.component.css'
+  styleUrl: './email-capture.component.scss'
 })
 export class EmailCaptureComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly http = inject(HttpClient);

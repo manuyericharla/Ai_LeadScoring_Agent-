@@ -1,0 +1,118 @@
+@import '../../../../styles/tokens';
+
+:host {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+:host(.app-btn--block) {
+  display: flex;
+  width: 100%;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: inherit;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-none);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+
+button:disabled,
+button.loading {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.app-btn__content {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sm {
+  height: var(--control-height-xs);
+  padding: 0 var(--space-3);
+}
+
+.md {
+  height: var(--control-height-md);
+  padding: 0 var(--space-4);
+}
+
+.lg {
+  height: var(--control-height-lg);
+  padding: 0 var(--space-5);
+  font-size: var(--text-md);
+}
+
+.primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.secondary {
+  background: var(--color-bg-card);
+  color: var(--color-text-body);
+  border-color: var(--color-border);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+}
+
+.danger {
+  background: var(--color-bg-card);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--color-danger-bg);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-text-body);
+  border-color: transparent;
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+}
+
+@keyframes app-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  animation: app-btn-spin 0.7s linear infinite;
+}

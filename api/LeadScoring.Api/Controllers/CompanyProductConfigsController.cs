@@ -20,12 +20,13 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
         }
 
         var configJson = JsonSerializer.Serialize(normalizedItems);
+        var nextProductId = await GetNextProductIdAsync();
         var entity = new CompanyProductConfig
         {
             Id = Guid.NewGuid(),
             CompanyName = request.CompanyName.Trim(),
             ProductName = request.ProductName.Trim(),
-            ProductId = request.ProductId,
+            ProductId = nextProductId,
             ProductEventConfigJson = configJson,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -67,7 +68,6 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
 
         entity.CompanyName = request.CompanyName.Trim();
         entity.ProductName = request.ProductName.Trim();
-        entity.ProductId = request.ProductId;
         entity.ProductEventConfigJson = JsonSerializer.Serialize(normalizedItems);
 
         try
@@ -136,13 +136,6 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
             return false;
         }
 
-        if (request.ProductId <= 0)
-        {
-            normalizedItems = new();
-            errorMessage = "ProductId must be greater than 0.";
-            return false;
-        }
-
         if (request.ProductEventConfig.Count == 0)
         {
             normalizedItems = new();
@@ -165,5 +158,14 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
 
         errorMessage = string.Empty;
         return true;
+    }
+
+    private async Task<int> GetNextProductIdAsync()
+    {
+        var max = await db.CompanyProductConfigs
+            .Select(x => x.ProductId)
+            .DefaultIfEmpty(0)
+            .MaxAsync();
+        return max + 1;
     }
 }

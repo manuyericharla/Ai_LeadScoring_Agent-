@@ -1,0 +1,140 @@
+@import '../../../../styles/tokens';
+
+:host {
+  display: block;
+}
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.lbl {
+  font-size: var(--text-13);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-snug);
+  color: var(--color-text-body);
+}
+
+.req {
+  margin-left: 2px;
+  color: var(--color-surface-danger-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.control {
+  position: relative;
+  display: block;
+}
+
+.field {
+  width: 100%;
+  height: var(--control-height-input);
+  padding: 0 calc(var(--space-3) + 28px) 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+  color: var(--color-text-heading);
+  background: var(--color-bg-card);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.field::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+.field:hover:not(:disabled) {
+  border-color: var(--color-text-placeholder);
+}
+
+.control.is-open .field,
+.field:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+
+.field:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--color-bg-hover);
+}
+
+.chev-btn {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: calc(var(--control-height-input) - 4px);
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.chev-icon {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.15s ease;
+}
+
+.control.is-open .chev-icon {
+  transform: rotate(180deg);
+  color: var(--color-primary);
+}
+
+.chev-btn:hover:not(:disabled) {
+  color: var(--color-text-body);
+}
+
+.chev-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 100;
+  margin: 0;
+  padding: var(--space-1) 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 10px 25px -5px rgba(15, 23, 42, 0.12),
+    0 8px 10px -6px rgba(15, 23, 42, 0.08);
+}
+
+.panel li {
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+  color: var(--color-text-heading);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.panel li:hover {
+  background: var(--color-bg-hover);
+}

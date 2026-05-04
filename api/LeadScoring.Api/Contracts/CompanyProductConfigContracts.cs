@@ -6,6 +6,7 @@ public sealed class UpsertCompanyProductConfigRequest
 {
     public string CompanyName { get; set; } = string.Empty;
     public string ProductName { get; set; } = string.Empty;
+    /// <summary>Optional; ignored. ProductId is assigned by the server on create and preserved on update.</summary>
     public int ProductId { get; set; }
     public Dictionary<string, int> ProductEventConfig { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
