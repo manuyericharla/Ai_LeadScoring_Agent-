@@ -58,7 +58,7 @@ export class WorkspaceComponent implements OnInit {
   activeTab: LeftTab = 'dashboard';
   trackingBaseUrl = this.resolveTrackingBase();
   /** Labels for Universal URL `src`; stored value matches option text; URL uses lowercase. */
-  readonly trackingSourceOptions = ['LinkedIn', 'Twitter', 'Facebook', 'Google', 'Other'];
+  readonly trackingSourceOptions = ['Email', 'LinkedIn', 'Twitter', 'Facebook', 'Google', 'Other'];
   universalLinkSource = '';
   universalLinkCampaign = '';
   universalLinkRedirect = '';
