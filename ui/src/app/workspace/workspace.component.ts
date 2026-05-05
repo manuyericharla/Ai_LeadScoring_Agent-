@@ -333,13 +333,20 @@ export class WorkspaceComponent implements OnInit {
   };
 
   readonly leadsCampaignComboboxLabelFn = (v: string): string => {
+    const counts = this.campaignCountsBySourceFilteredLeads();
+    let n: number;
     if (v === '') {
-      return 'All campaigns';
+      n = this.leadsMatchingSourceOnly.length;
+    } else {
+      n = counts.get(v) ?? 0;
+    }
+    if (v === '') {
+      return `All campaigns (${n})`;
     }
     if (v === this.leadsCampaignNoneSentinel) {
-      return 'None';
+      return `None (${n})`;
     }
-    return v;
+    return `${v} (${n})`;
   };
 
   /** Distinct source labels for the filter dropdown (canonical list plus any extra values present in data). */
@@ -367,12 +374,12 @@ export class WorkspaceComponent implements OnInit {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }
 
-  get leadsMatchingTableFilters(): DashboardLead[] {
+  /** Same source rules as table; excludes campaign filter (used for campaign dropdown counts). */
+  private get leadsMatchingSourceOnly(): DashboardLead[] {
     if (!this.data) {
       return [];
     }
     let list = this.data.leads;
-
     const sf = this.leadsSourceFilter.trim();
     if (sf) {
       list = list.filter((l) => {
@@ -383,6 +390,21 @@ export class WorkspaceComponent implements OnInit {
         return v === sf;
       });
     }
+    return list;
+  }
+
+  private campaignCountsBySourceFilteredLeads(): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const l of this.leadsMatchingSourceOnly) {
+      const c = (l.lastEventCampaign ?? '').trim();
+      const key = c ? c : this.leadsCampaignNoneSentinel;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }
+
+  get leadsMatchingTableFilters(): DashboardLead[] {
+    let list = this.leadsMatchingSourceOnly;
 
     const cf = this.leadsCampaignFilter.trim();
     if (cf) {
