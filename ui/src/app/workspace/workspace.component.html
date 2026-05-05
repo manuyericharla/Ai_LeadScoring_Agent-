@@ -427,7 +427,7 @@
       <div class="info-banner__text">
         <p class="info-banner__title">How this link works</p>
         <p class="info-banner__body">
-          Clicks hit your server at <code>/r</code> first (so you capture the campaign and source), then visitors are redirected to your site. No shared cookies across domains—just the parameters in the URL.
+          Clicks hit your server at <code>/r</code> first (so you capture the campaign and source), then visitors are redirected to your site. No shared cookies across domains—just the parameters in the URL. For other sites, use <code>public/lead-scoring-analytics.js</code> (POSTs to <code>/api/ingest/site-activity</code>; <code>/track/event</code> remains for older clients)—on <code>localhost</code> it targets port 5221 automatically.
         </p>
       </div>
     </div>

@@ -407,7 +407,9 @@ public class TrackingController(
         }
     }
 
+    /// <summary>Primary path; some browser extensions block URLs containing <c>/track/</c>. Use <c>/api/ingest/site-activity</c> from the web snippet.</summary>
     [HttpPost("event")]
+    [HttpPost("~/api/ingest/site-activity")]
     public async Task<IActionResult> TrackEvent([FromBody] TrackEventRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.VisitorId))
