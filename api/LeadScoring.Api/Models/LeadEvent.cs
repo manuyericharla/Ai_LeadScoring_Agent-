@@ -4,6 +4,7 @@ public class LeadEvent
 {
     public Guid Id { get; set; }
     public Guid? LeadId { get; set; }
+    public int EventScore { get; set; }
     public string? VisitorId { get; set; }
     public string? Campaign { get; set; }
     public EventType Type { get; set; }

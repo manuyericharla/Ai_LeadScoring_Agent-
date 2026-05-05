@@ -3,6 +3,7 @@ using System;
 using LeadScoring.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LeadScoring.Api.Migrations
 {
     [DbContext(typeof(LeadScoringDbContext))]
-    partial class LeadScoringDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260505095945_AddEventScoreToEvents")]
+    partial class AddEventScoreToEvents
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

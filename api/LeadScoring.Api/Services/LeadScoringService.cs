@@ -17,6 +17,7 @@ public class LeadScoringService(
     {
         if (leadEvent.LeadId is null)
         {
+            leadEvent.EventScore = 0;
             db.Events.Add(leadEvent);
             await db.SaveChangesAsync();
             return;
@@ -29,9 +30,10 @@ public class LeadScoringService(
         }
 
         var previousStage = lead.Stage;
+        var scoreDelta = await GetScoreDeltaAsync(lead, leadEvent);
+        leadEvent.EventScore = scoreDelta;
         db.Events.Add(leadEvent);
         lead.LastActivityUtc = leadEvent.TimestampUtc;
-        var scoreDelta = await GetScoreDeltaAsync(lead, leadEvent);
         if (scoreDelta > 0)
         {
             lead.Score += scoreDelta;

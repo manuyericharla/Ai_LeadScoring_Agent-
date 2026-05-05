@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LeadScoring.Api.Services;
 
-public class VisitorAttributionService(LeadScoringDbContext db)
+public class VisitorAttributionService(
+    LeadScoringDbContext db,
+    LeadScoringService leadScoringService)
 {
     public async Task<Visitor> EnsureVisitorAsync(string visitorId, EventSource source, string? userAgent, string? ipAddress)
     {
@@ -40,7 +42,7 @@ public class VisitorAttributionService(LeadScoringDbContext db)
     {
         await EnsureVisitorAsync(visitorId, source, null, null);
 
-        db.Events.Add(new LeadEvent
+        var leadEvent = new LeadEvent
         {
             Id = Guid.NewGuid(),
             VisitorId = visitorId.Trim(),
@@ -50,8 +52,15 @@ public class VisitorAttributionService(LeadScoringDbContext db)
             Campaign = string.IsNullOrWhiteSpace(campaign) ? null : campaign.Trim(),
             TimestampUtc = DateTime.UtcNow,
             MetadataJson = metadataJson
-        });
+        };
 
+        if (leadId.HasValue)
+        {
+            await leadScoringService.AddEventAsync(leadEvent);
+            return;
+        }
+
+        db.Events.Add(leadEvent);
         await db.SaveChangesAsync();
     }
 
