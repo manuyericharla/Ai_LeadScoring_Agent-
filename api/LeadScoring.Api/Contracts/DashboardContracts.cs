@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LeadScoring.Api.Contracts;
 
 public record LeadDashboardDto(
@@ -8,6 +10,8 @@ public record LeadDashboardDto(
     DateTime LastActivityUtc,
     DateTime? LastScoredAtUtc,
     string? LastEvent,
+    [property: JsonPropertyName("lastEventSource")] string? LastEventSource,
+    [property: JsonPropertyName("lastEventCampaign")] string? LastEventCampaign,
     string? LastEmailName,
     string? NextEmailName,
     DateTime? NextDateTimeUtc,

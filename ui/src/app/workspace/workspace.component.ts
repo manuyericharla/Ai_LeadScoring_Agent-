@@ -42,7 +42,6 @@ export class WorkspaceComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly trackingBaseStorageKey = 'leadScoring.trackingBaseUrl';
   private copyFlashTimer?: ReturnType<typeof setTimeout>;
   apiBase = this.resolveApiBase();
   loading = false;
@@ -55,8 +54,13 @@ export class WorkspaceComponent implements OnInit {
   importing = false;
   pageSize = 10;
   currentPage = 1;
+  /** Empty string = all sources; matches `lastEventSource` from the API (or missing/Unknown when set to Unknown). */
+  leadsSourceFilter = '';
+  /** Empty string = all campaigns; use `leadsCampaignNoneSentinel` for rows with no campaign. */
+  leadsCampaignFilter = '';
+  readonly leadsCampaignNoneSentinel = '__no_campaign__';
+  readonly knownEventSourceLabels = ['Unknown', 'Email', 'Website', 'LinkedIn', 'Direct', 'Organic'] as const;
   activeTab: LeftTab = 'dashboard';
-  trackingBaseUrl = this.resolveTrackingBase();
   /** Labels for Universal URL `src`; stored value matches option text; URL uses lowercase. */
   readonly trackingSourceOptions = ['Email', 'LinkedIn', 'Twitter', 'Facebook', 'Google', 'Other'];
   universalLinkSource = '';
@@ -110,10 +114,6 @@ export class WorkspaceComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    const savedBase = typeof localStorage !== 'undefined' ? localStorage.getItem(this.trackingBaseStorageKey)?.trim() : '';
-    if (savedBase) {
-      this.trackingBaseUrl = savedBase;
-    }
     this.syncTabFromRoute();
     this.router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd)).subscribe(() => this.syncTabFromRoute());
     this.loadDashboard();
@@ -159,7 +159,7 @@ export class WorkspaceComponent implements OnInit {
   }
 
   get builtUniversalTrackingLink(): string {
-    const base = this.trackingBaseUrl.trim().replace(/\/$/, '');
+    const base = this.universalLinkApiBase().replace(/\/$/, '');
     if (!base) {
       return '';
     }
@@ -205,29 +205,13 @@ export class WorkspaceComponent implements OnInit {
     return !!url && this.universalRedirectValidation !== 'invalid';
   }
 
-  onTrackingBaseUrlChange(value: unknown): void {
-    this.trackingBaseUrl = String(value ?? '');
-    this.persistTrackingBaseUrl();
-  }
-
-  persistTrackingBaseUrl(): void {
-    const v = this.trackingBaseUrl.trim();
-    if (typeof localStorage !== 'undefined') {
-      if (v) {
-        localStorage.setItem(this.trackingBaseStorageKey, v);
-      } else {
-        localStorage.removeItem(this.trackingBaseStorageKey);
-      }
-    }
-  }
-
   async copyUniversalTrackingLink(): Promise<void> {
     this.trackingLinkCopyStatus = '';
     this.linkCopiedFlash = false;
     clearTimeout(this.copyFlashTimer);
     const url = this.builtUniversalTrackingLink;
     if (!url) {
-      this.trackingLinkCopyStatus = 'Set the tracking server URL first.';
+      this.trackingLinkCopyStatus = 'Could not determine the API base URL for this page.';
       return;
     }
     if (this.universalRedirectValidation === 'invalid') {
@@ -331,8 +315,91 @@ export class WorkspaceComponent implements OnInit {
     });
   }
 
+  /** Source filter values for the combobox (empty = all). */
+  get leadsSourceComboboxOptions(): string[] {
+    return ['', ...this.leadsSourceFilterSelectOptions];
+  }
+
+  /** Campaign filter values for the combobox (empty = all; sentinel = no campaign). */
+  get leadsCampaignComboboxOptions(): string[] {
+    return ['', this.leadsCampaignNoneSentinel, ...this.leadsCampaignFilterSelectOptions];
+  }
+
+  readonly leadsSourceComboboxLabelFn = (v: string): string => {
+    if (v === '') {
+      return 'All sources';
+    }
+    return this.sourceFilterOptionLabel(v);
+  };
+
+  readonly leadsCampaignComboboxLabelFn = (v: string): string => {
+    if (v === '') {
+      return 'All campaigns';
+    }
+    if (v === this.leadsCampaignNoneSentinel) {
+      return 'None';
+    }
+    return v;
+  };
+
+  /** Distinct source labels for the filter dropdown (canonical list plus any extra values present in data). */
+  get leadsSourceFilterSelectOptions(): string[] {
+    const known: string[] = [...this.knownEventSourceLabels];
+    const extra = new Set<string>();
+    for (const l of this.data?.leads ?? []) {
+      const s = l.lastEventSource?.trim();
+      if (s && !known.includes(s)) {
+        extra.add(s);
+      }
+    }
+    return [...known, ...Array.from(extra).sort((a, b) => a.localeCompare(b))];
+  }
+
+  /** Distinct non-empty campaign values from loaded leads. */
+  get leadsCampaignFilterSelectOptions(): string[] {
+    const set = new Set<string>();
+    for (const l of this.data?.leads ?? []) {
+      const c = l.lastEventCampaign?.trim();
+      if (c) {
+        set.add(c);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  get leadsMatchingTableFilters(): DashboardLead[] {
+    if (!this.data) {
+      return [];
+    }
+    let list = this.data.leads;
+
+    const sf = this.leadsSourceFilter.trim();
+    if (sf) {
+      list = list.filter((l) => {
+        const v = (l.lastEventSource ?? '').trim();
+        if (sf === 'Unknown') {
+          return !v || v === 'Unknown';
+        }
+        return v === sf;
+      });
+    }
+
+    const cf = this.leadsCampaignFilter.trim();
+    if (cf) {
+      list = list.filter((l) => {
+        const c = (l.lastEventCampaign ?? '').trim();
+        if (cf === this.leadsCampaignNoneSentinel) {
+          return !c;
+        }
+        return c === cf;
+      });
+    }
+
+    return list;
+  }
+
   get totalLeads(): number {
-    return this.data?.leads.length ?? 0;
+    return this.leadsMatchingTableFilters.length;
   }
 
   get totalPages(): number {
@@ -340,12 +407,18 @@ export class WorkspaceComponent implements OnInit {
   }
 
   get paginatedLeads(): DashboardLead[] {
-    if (!this.data) {
-      return [];
-    }
-
+    const list = this.leadsMatchingTableFilters;
     const start = (this.currentPage - 1) * this.pageSize;
-    return this.data.leads.slice(start, start + this.pageSize);
+    return list.slice(start, start + this.pageSize);
+  }
+
+  onLeadsTableFilterChange(): void {
+    this.currentPage = 1;
+  }
+
+  /** Display label for source filter options (`Unknown` is shown as "Others"). */
+  sourceFilterOptionLabel(value: string): string {
+    return value === 'Unknown' ? 'Others' : value;
   }
 
   previousPage(): void {
@@ -557,21 +630,16 @@ export class WorkspaceComponent implements OnInit {
     });
   }
 
-  private resolveTrackingBase(): string {
-    if (typeof window === 'undefined') {
-      return '';
+  /** Absolute origin for `/r` links: same rules as `apiBase`, with origin fallback when API is same-host relative. */
+  private universalLinkApiBase(): string {
+    const configured = this.apiBase.trim();
+    if (configured) {
+      return configured;
     }
-
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return '';
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
     }
-
-    if (this.isPrivateIpv4Host(host)) {
-      return `http://${host}:8211`;
-    }
-
-    return window.location.origin;
+    return '';
   }
 
   private resolveApiBase(): string {
@@ -614,6 +682,8 @@ interface DashboardLead {
   lastActivityUtc: string;
   lastScoredAtUtc?: string | null;
   lastEvent?: string | null;
+  lastEventSource?: string | null;
+  lastEventCampaign?: string | null;
   lastEmailName?: string | null;
   nextEmailName?: string | null;
   nextDateTimeUtc?: string | null;

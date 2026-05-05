@@ -28,6 +28,15 @@
   display: block;
 }
 
+.control.select-only:not(.is-disabled) {
+  cursor: pointer;
+}
+
+.control.select-only:not(.is-disabled) .field {
+  cursor: pointer;
+  caret-color: transparent;
+}
+
 .field {
   width: 100%;
   height: var(--control-height-input);

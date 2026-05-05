@@ -49,7 +49,7 @@ public class VisitorAttributionService(
             LeadId = leadId,
             Source = source,
             Type = eventType,
-            Campaign = string.IsNullOrWhiteSpace(campaign) ? null : campaign.Trim(),
+            Campaign = EventCampaignResolver.Resolve(campaign, metadataJson),
             TimestampUtc = DateTime.UtcNow,
             MetadataJson = metadataJson
         };
@@ -146,6 +146,7 @@ public class VisitorAttributionService(
             .Where(x => x.VisitorId == visitorId && x.LeadId == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.LeadId, lead.Id));
 
+        var bookDemoMetadataJson = BuildWebsiteDemoMetadata(request, visitorId);
         db.Events.Add(new LeadEvent
         {
             Id = Guid.NewGuid(),
@@ -154,8 +155,8 @@ public class VisitorAttributionService(
             Type = EventType.BookDemo,
             Source = visitorSource,
             TimestampUtc = nowUtc,
-            Campaign = string.IsNullOrWhiteSpace(request.Campaign) ? null : request.Campaign.Trim(),
-            MetadataJson = BuildWebsiteDemoMetadata(request, visitorId)
+            Campaign = EventCampaignResolver.Resolve(request.Campaign, bookDemoMetadataJson),
+            MetadataJson = bookDemoMetadataJson
         });
 
         await db.SaveChangesAsync();
@@ -403,6 +404,13 @@ public class VisitorAttributionService(
             ["dwellMs"] = dwellMs
         };
 
+        if (!string.IsNullOrWhiteSpace(campaign))
+        {
+            gateMetadata["campaign"] = campaign.Trim();
+        }
+
+        var gateMetadataJson = JsonSerializer.Serialize(gateMetadata);
+
         db.Events.Add(new LeadEvent
         {
             Id = Guid.NewGuid(),
@@ -411,8 +419,8 @@ public class VisitorAttributionService(
             Type = EventType.EmailCaptured,
             Source = visitorSource,
             TimestampUtc = nowUtc,
-            Campaign = string.IsNullOrWhiteSpace(campaign) ? null : campaign.Trim(),
-            MetadataJson = JsonSerializer.Serialize(gateMetadata)
+            Campaign = EventCampaignResolver.Resolve(campaign, gateMetadataJson),
+            MetadataJson = gateMetadataJson
         });
 
         await db.SaveChangesAsync();

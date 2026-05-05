@@ -7,21 +7,27 @@
       }
     </label>
   }
-  <div class="control" [class.is-open]="panelVisible" [class.is-disabled]="disabled">
+  <div
+    class="control"
+    [class.is-open]="open && !disabled"
+    [class.is-disabled]="disabled"
+    [class.select-only]="pickOnly"
+  >
     <input
       [id]="inputId"
       type="text"
       class="field"
       [placeholder]="placeholder"
-      [value]="allowCustomValue ? value : open ? filterText : value"
+      [value]="allowCustomValue ? value : open ? filterText : labelFor(value)"
       [disabled]="disabled"
+      [readonly]="pickOnly"
       (input)="onInput($event)"
       (focus)="onInputFocus()"
       (blur)="onBlur()"
       (keydown)="onInputKeydown($event)"
       autocomplete="off"
-      [attr.aria-expanded]="panelVisible"
-      aria-autocomplete="list"
+      [attr.aria-expanded]="open"
+      [attr.aria-autocomplete]="pickOnly ? 'none' : 'list'"
       [attr.aria-controls]="panelVisible ? inputId + '-listbox' : ''"
     />
     <button
@@ -43,7 +49,7 @@
     @if (panelVisible) {
       <ul class="panel" [id]="inputId + '-listbox'" role="listbox">
         @for (opt of filteredOptions; track opt) {
-          <li role="option" (mousedown)="selectOption(opt, $event)">{{ opt }}</li>
+          <li role="option" (mousedown)="selectOption(opt, $event)">{{ labelFor(opt) }}</li>
         }
       </ul>
     }

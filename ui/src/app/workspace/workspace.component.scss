@@ -300,6 +300,11 @@
   color: var(--color-text-muted);
 }
 
+.pager-filter-combobox {
+  min-width: 11.5rem;
+  flex: 0 1 auto;
+}
+
 .ws-select {
   height: var(--control-height-sm);
   padding: 0 var(--space-8) 0 var(--space-3);
@@ -656,14 +661,14 @@
   color: #64748b;
 }
 
-.tracking-row-3 {
+.tracking-row-2 {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
   align-items: end;
 }
 
-.tracking-row-3 > * {
+.tracking-row-2 > * {
   min-width: 0;
 }
 
@@ -813,7 +818,7 @@
     grid-template-columns: 1fr;
   }
 
-  .tracking-row-3 {
+  .tracking-row-2 {
     grid-template-columns: 1fr;
   }
 }

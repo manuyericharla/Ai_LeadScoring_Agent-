@@ -32,10 +32,19 @@ export class AppComboboxComponent implements ControlValueAccessor {
   @Input() placeholder = '';
   @Input() required = false;
   @Input() options: string[] = [];
-  /** When false, only listed options can be chosen (filters while typing; model does not accept free text). */
+  /** When false, only listed options can be chosen; the field is read-only (open list with click/focus/chevron, no type-to-search). */
   @Input() allowCustomValue = true;
+  /** When true with `allowCustomValue` true, same read-only behavior: pick from list only (no typing). */
+  @Input() selectOnly = false;
+  /** Optional display label per option value (e.g. map "" → "All sources"). List filtering matches label and raw value. */
+  @Input() optionLabelFn?: (value: string) => string;
 
   readonly inputId = `app-combobox-${++appComboboxUid}`;
+
+  /** Read-only control: no typing / no type-to-filter. */
+  get pickOnly(): boolean {
+    return !this.allowCustomValue || this.selectOnly;
+  }
 
   value = '';
   /** Scratch text for filtering the list when `allowCustomValue` is false. */
@@ -46,13 +55,32 @@ export class AppComboboxComponent implements ControlValueAccessor {
   private onChange: (v: unknown) => void = () => {};
   private onTouched: () => void = () => {};
 
+  labelFor(value: string): string {
+    return this.optionLabelFn ? this.optionLabelFn(value) : value;
+  }
+
   get filteredOptions(): string[] {
-    const q = (this.allowCustomValue || !this.open ? this.value : this.filterText).trim().toLowerCase();
     const opts = this.options ?? [];
+    let rawQuery: string;
+    if (this.allowCustomValue || !this.open) {
+      rawQuery = this.value;
+    } else {
+      rawQuery = this.filterText;
+      // Select-only + open: full selected label in the field is the initial state, not a search.
+      // Otherwise e.g. "All sources" only matches the "" option's label and hides every other row.
+      if (rawQuery.trim() === this.labelFor(this.value).trim()) {
+        rawQuery = '';
+      }
+    }
+    const q = rawQuery.trim().toLowerCase();
     if (!q) {
       return opts;
     }
-    return opts.filter((o) => o.toLowerCase().includes(q));
+    return opts.filter((o) => {
+      const raw = String(o).toLowerCase();
+      const lv = this.labelFor(o).toLowerCase();
+      return raw.includes(q) || lv.includes(q);
+    });
   }
 
   /** True when the suggestion list is shown (omitted when there are zero matches). */
@@ -64,13 +92,13 @@ export class AppComboboxComponent implements ControlValueAccessor {
     if (obj === null || obj === undefined) {
       this.value = '';
       if (!this.allowCustomValue) {
-        this.filterText = '';
+        this.filterText = this.labelFor('');
       }
       return;
     }
     this.value = String(obj);
     if (!this.allowCustomValue) {
-      this.filterText = this.value;
+      this.filterText = this.labelFor(this.value);
     }
   }
 
@@ -108,7 +136,7 @@ export class AppComboboxComponent implements ControlValueAccessor {
     if (!this.disabled) {
       this.open = true;
       if (!this.allowCustomValue) {
-        this.filterText = this.value;
+        this.filterText = this.labelFor(this.value);
       }
     }
   }
@@ -139,7 +167,7 @@ export class AppComboboxComponent implements ControlValueAccessor {
     } else {
       this.open = true;
       if (!this.allowCustomValue) {
-        this.filterText = this.value;
+        this.filterText = this.labelFor(this.value);
       }
     }
   }
@@ -154,7 +182,7 @@ export class AppComboboxComponent implements ControlValueAccessor {
   private closePanel(): void {
     this.open = false;
     if (!this.allowCustomValue) {
-      this.filterText = this.value;
+      this.filterText = this.labelFor(this.value);
     }
   }
 }

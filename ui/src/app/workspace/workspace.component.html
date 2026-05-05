@@ -190,7 +190,32 @@
       <h2>Leads</h2>
       <div class="pager-strip">
         <div class="rows-wrap">
-          <span>Rows per page</span>
+          <span>Source</span>
+          <app-combobox
+            name="leadsSrcFilter"
+            class="pager-filter-combobox"
+            placeholder="All sources"
+            [(ngModel)]="leadsSourceFilter"
+            (ngModelChange)="onLeadsTableFilterChange()"
+            [allowCustomValue]="false"
+            [options]="leadsSourceComboboxOptions"
+            [optionLabelFn]="leadsSourceComboboxLabelFn"
+          />
+        </div>
+        <div class="rows-wrap">
+          <span>Campaign</span>
+          <app-combobox
+            name="leadsCmpFilter"
+            class="pager-filter-combobox"
+            placeholder="All campaigns"
+            [(ngModel)]="leadsCampaignFilter"
+            (ngModelChange)="onLeadsTableFilterChange()"
+            [allowCustomValue]="false"
+            [options]="leadsCampaignComboboxOptions"
+            [optionLabelFn]="leadsCampaignComboboxLabelFn"
+          />
+        </div>
+        <div class="rows-wrap">
           <select id="pageSizeLeads" class="ws-select" [(ngModel)]="pageSize" (change)="onPageSizeChange()" name="pageSzLeads">
             <option [ngValue]="10">10</option>
             <option [ngValue]="25">25</option>
@@ -215,6 +240,8 @@
               <th scope="col">Stage</th>
               <th scope="col">Last activity</th>
               <th scope="col">Last event</th>
+              <th scope="col">Source</th>
+              <th scope="col">Campaign</th>
               <th scope="col">Next date</th>
               <th scope="col">Last email</th>
               <th scope="col">Next email</th>
@@ -237,6 +264,8 @@
                 {{ lead.lastActivityUtc | date: 'MM/dd/yy, HH:mm' }}
               </td>
               <td class="cell-muted leads-cell-ellipsis leads-cell-muted-long" [attr.title]="lead.lastEvent || ''">{{ lead.lastEvent || '—' }}</td>
+              <td class="cell-muted leads-cell-ellipsis" [attr.title]="lead.lastEventSource || ''">{{ lead.lastEventSource || '—' }}</td>
+              <td class="cell-muted leads-cell-ellipsis" [attr.title]="lead.lastEventCampaign || ''">{{ lead.lastEventCampaign || '—' }}</td>
               <td class="cell-muted leads-cell-dt" [attr.title]="lead.nextDateTimeUtc ? (lead.nextDateTimeUtc | date: 'medium') : ''">
                 {{ lead.nextDateTimeUtc ? (lead.nextDateTimeUtc | date: 'MM/dd/yy, HH:mm') : '—' }}
               </td>
@@ -285,7 +314,7 @@
       <div class="info-banner__text">
         <p class="info-banner__title">How to add a company product config</p>
         <p class="info-banner__body">
-          Pick <strong>company</strong> and <strong>product</strong> (choose from the lists or type a new name). Add each funnel event you care about—like “Pricing page” or “Book demo”—and give it a score of <strong>0 or higher</strong>. Submit to save; your configs show up in the <strong>list below</strong>, where you can filter or edit.
+          Choose <strong>company</strong> and <strong>product</strong> from the dropdowns. Add each funnel event you care about—like “Pricing page” or “Book demo”—and give it a score of <strong>0 or higher</strong>. Submit to save; your configs show up in the <strong>list below</strong>, where you can filter or edit.
         </p>
       </div>
     </div>
@@ -298,6 +327,7 @@
         placeholder="Choose company"
         [(ngModel)]="companyProductForm.companyName"
         [options]="distinctCompanyNames"
+        [allowCustomValue]="false"
       />
       <app-combobox
         label="Product Name"
@@ -306,6 +336,7 @@
         placeholder="Choose product"
         [(ngModel)]="companyProductForm.productName"
         [options]="productsForSelectedCompany"
+        [allowCustomValue]="false"
       />
     </div>
     <div class="event-config-section">
@@ -416,7 +447,7 @@
 <div *ngIf="activeTab === 'tracking-links'">
   <app-workspace-top-bar
     title="Tracking Links"
-    subtitle="Set your landing page and server, then copy one link for LinkedIn, ads, and other channels."
+    subtitle="Set your landing page and campaign, then copy one link for LinkedIn, ads, and other channels."
   />
 
   <app-card heading="Universal Tracking URL">
@@ -442,14 +473,7 @@
         <p class="invalid-msg">Enter a valid absolute URL starting with http:// or https://.</p>
       }
 
-      <div class="tracking-row-3">
-        <app-input
-          label="Tracking server base URL"
-          [ngModel]="trackingBaseUrl"
-          (ngModelChange)="onTrackingBaseUrlChange($event)"
-          name="trackingBaseUrl"
-          placeholder="https://api.yourdomain.com/"
-        />
+      <div class="tracking-row-2">
         <app-combobox
           label="Source (src)"
           name="uniSrc"
