@@ -11,4 +11,7 @@ public class BatchConfig
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public DateTime? DailyRunCountDateUtc { get; set; }
+    public int DailyRunCount { get; set; }
+    public DateTime? LastDailyRunUtc { get; set; }
 }

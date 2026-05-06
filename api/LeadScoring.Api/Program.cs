@@ -97,6 +97,27 @@ if (app.Environment.IsDevelopment())
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/", () => Results.Redirect("/swagger"));
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Email:EnableObserverTestEndpoint"))
+{
+    app.MapPost("/internal/email-observer-test", async (IEmailService email) =>
+    {
+        const string sampleTo = "prathap.scadea@gmail.com";
+        var html = """
+            <html><body>
+            <p>LeadScoring.Api observer test — same <code>IEmailService</code> path as batch and inactivity schedulers.</p>
+            <p>With <code>Email:AlwaysBcc</code>, real sends include Bcc to the observer unless it matches the lead address.</p>
+            </body></html>
+            """;
+        await email.SendAsync(sampleTo, "[LeadScoring] Observer / scheduler pipeline test", html);
+        return Results.Ok(new
+        {
+            status = "sent",
+            to = sampleTo,
+            note = "One copy when To equals observer; otherwise lead gets To and observer gets Bcc."
+        });
+    });
+}
+
 app.MapControllers();
 
 app.Run();

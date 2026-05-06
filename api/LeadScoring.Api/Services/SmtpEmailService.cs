@@ -22,6 +22,9 @@ public class SmtpEmailService(IConfiguration configuration, ILogger<SmtpEmailSer
         }
 
         using var message = new MailMessage(fromAddress, to, subject, htmlBody) { IsBodyHtml = true };
+        var observers = EmailAlwaysBcc.GetAddresses(configuration);
+        EmailAlwaysBcc.AddDistinctBcc(message.Bcc, to, observers);
+
         using var client = new SmtpClient(host, port)
         {
             EnableSsl = true,
@@ -29,6 +32,6 @@ public class SmtpEmailService(IConfiguration configuration, ILogger<SmtpEmailSer
         };
 
         await client.SendMailAsync(message);
-        logger.LogInformation("Email sent to {Recipient}", to);
+        logger.LogInformation("Email sent to {Recipient}{BccLog}", to, message.Bcc.Count > 0 ? $" with {message.Bcc.Count} observer Bcc" : string.Empty);
     }
 }

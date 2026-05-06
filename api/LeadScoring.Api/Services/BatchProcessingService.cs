@@ -103,6 +103,11 @@ public class BatchProcessingService(
         {
             var nowUtc = DateTime.UtcNow;
             var windowsToRun = GetWindowsToRun(config, nowUtc);
+            if (config.Day && windowsToRun.Contains(BatchType.Daily) && !CanRunDailyBatch(config, nowUtc))
+            {
+                windowsToRun.Remove(BatchType.Daily);
+            }
+
             if (windowsToRun.Count == 0)
             {
                 return;
@@ -114,6 +119,10 @@ public class BatchProcessingService(
             foreach (var batchType in windowsToRun)
             {
                 await ProcessBatchWindowAsync(config, batchType, leads, cancellationToken);
+                if (batchType == BatchType.Daily)
+                {
+                    RegisterDailyBatchCompleted(config);
+                }
             }
 
             config.UpdatedAt = nowUtc;
@@ -190,8 +199,6 @@ public class BatchProcessingService(
     private static List<BatchType> GetWindowsToRun(BatchConfig config, DateTime nowUtc)
     {
         var windows = new List<BatchType>();
-        // Daily mode is treated as "process incremental leads each worker cycle".
-        // Interval gating here can delay same-day new leads until the next day.
         if (config.Day)
         {
             windows.Add(BatchType.Daily);
@@ -208,6 +215,60 @@ public class BatchProcessingService(
         }
 
         return windows;
+    }
+
+    private int GetMaxDailyRunsForStage(LeadStage stage)
+    {
+        var key = $"BatchProcessing:DailyRunsByStage:{stage}";
+        var configured = configuration.GetValue<int?>(key);
+        if (configured is > 0)
+        {
+            return configured.Value;
+        }
+
+        return stage switch
+        {
+            LeadStage.Cold => 3,
+            LeadStage.Warm => 2,
+            _ => 2
+        };
+    }
+
+    private bool CanRunDailyBatch(BatchConfig config, DateTime nowUtc)
+    {
+        var maxRuns = GetMaxDailyRunsForStage(config.Stage);
+        var today = nowUtc.Date;
+
+        var countToday = config.DailyRunCountDateUtc?.Date == today ? config.DailyRunCount : 0;
+        if (countToday >= maxRuns)
+        {
+            return false;
+        }
+
+        if (config.LastDailyRunUtc is { } last)
+        {
+            var minGap = TimeSpan.FromHours(24.0 / maxRuns);
+            if (nowUtc - last < minGap)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void RegisterDailyBatchCompleted(BatchConfig config)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var today = nowUtc.Date;
+        if (!config.DailyRunCountDateUtc.HasValue || config.DailyRunCountDateUtc.Value.Date != today)
+        {
+            config.DailyRunCountDateUtc = today;
+            config.DailyRunCount = 0;
+        }
+
+        config.DailyRunCount++;
+        config.LastDailyRunUtc = nowUtc;
     }
 
     private static bool ShouldRun(bool enabled, DateTime? updatedAt, DateTime nowUtc, TimeSpan interval)
