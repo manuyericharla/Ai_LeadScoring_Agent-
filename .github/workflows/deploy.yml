@@ -81,6 +81,24 @@ jobs:
           echo "Secret Key length: ${#AWS_SECRET_ACCESS_KEY}"
           aws sts get-caller-identity
 
+      - name: Free Docker Disk Space (Pre-Build)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk usage before cleanup:"
+          df -h || true
+          docker system df || true
+
+          # Free dangling/unused Docker resources on self-hosted runner.
+          docker container prune -f || true
+          docker image prune -af || true
+          docker builder prune -af || true
+          docker volume prune -f || true
+
+          echo "Disk usage after cleanup:"
+          df -h || true
+          docker system df || true
+
       - name: Build Backend Image
         shell: bash
         run: |
