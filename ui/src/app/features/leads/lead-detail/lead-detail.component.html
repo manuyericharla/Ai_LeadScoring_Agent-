@@ -1,0 +1,69 @@
+<p class="caption-muted flash" *ngIf="loading">Loading events…</p>
+<p class="flash flash-error" *ngIf="error">{{ error }}</p>
+
+<ng-container *ngIf="payload && !loading">
+  <app-workspace-top-bar [title]="payload.email" subtitle="Event timeline and score per activity.">
+    <div actions class="detail-actions">
+      <app-button variant="secondary" size="sm" type="button" (click)="goBack()">Back to leads</app-button>
+    </div>
+  </app-workspace-top-bar>
+
+  <div class="detail-summary">
+    <app-card>
+      <div class="summary-row">
+        <div>
+          <span class="muted-lbl">Total score</span>
+          <div class="summary-val">
+            <app-badge [score]="payload.totalScore">{{ payload.totalScore }}</app-badge>
+          </div>
+        </div>
+        <div>
+          <span class="muted-lbl">Stage</span>
+          <div class="summary-val">
+            <app-badge [stage]="stageBadge(payload.stage)">{{ payload.stage }}</app-badge>
+          </div>
+        </div>
+        <div>
+          <span class="muted-lbl">Events</span>
+          <div class="summary-val summary-num">{{ payload.events.length | number }}</div>
+        </div>
+      </div>
+    </app-card>
+  </div>
+
+  <app-card heading="Events">
+    <div class="events-table-wrap" *ngIf="payload.events.length > 0; else noEvents">
+      <app-table>
+        <table class="events-table">
+          <thead>
+            <tr>
+              <th scope="col">Time (UTC)</th>
+              <th scope="col">What</th>
+              <th scope="col">Type</th>
+              <th scope="col">Source</th>
+              <th scope="col">Campaign</th>
+              <th scope="col">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (ev of payload.events; track ev.id) {
+              <tr>
+                <td class="cell-dt" [attr.title]="ev.timestampUtc | date: 'full'">{{ ev.timestampUtc | date: 'MM/dd/yy, HH:mm:ss' }}</td>
+                <td class="cell-what" [attr.title]="ev.what">{{ ev.what }}</td>
+                <td class="cell-muted">{{ ev.eventType }}</td>
+                <td class="cell-muted">{{ ev.source }}</td>
+                <td class="cell-muted cell-ellipsis" [attr.title]="ev.campaign || ''">{{ ev.campaign || '—' }}</td>
+                <td class="cell-badge">
+                  <app-badge [score]="ev.eventScore">{{ ev.eventScore }}</app-badge>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </app-table>
+    </div>
+    <ng-template #noEvents>
+      <p class="empty-msg">No events recorded for this lead yet.</p>
+    </ng-template>
+  </app-card>
+</ng-container>

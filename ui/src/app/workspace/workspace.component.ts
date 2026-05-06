@@ -1,9 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnInit, inject } from '@angular/core';
 import { DecimalPipe, DatePipe, NgFor, NgIf } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { filter } from 'rxjs';
+import { filter, finalize } from 'rxjs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { AppBadgeComponent } from '../shared/components/badge/app-badge.component';
@@ -76,7 +76,18 @@ export class WorkspaceComponent implements OnInit {
   configError = '';
   configSuccess = '';
   savingConfig = false;
-  editingConfigId?: string;
+  deletingConfigId: string | null = null;
+  /** When set, the delete confirmation modal is visible. */
+  companyConfigDeleteTarget: CompanyProductConfig | null = null;
+  /** When set, the edit-company-config modal is open (matches row id). */
+  companyConfigEditModalId: string | null = null;
+  companyProductEditForm: CompanyProductForm = {
+    companyName: '',
+    productName: '',
+    items: [{ eventName: '', score: '' }]
+  };
+  configEditModalError = '';
+  savingEditModal = false;
   companyProductForm: CompanyProductForm = {
     companyName: '',
     productName: '',
@@ -97,7 +108,16 @@ export class WorkspaceComponent implements OnInit {
 
   /** Product names for the typed/selected company (trimmed names, case-insensitive). */
   get productsForSelectedCompany(): string[] {
-    const target = this.companyProductForm.companyName.trim().toLowerCase();
+    return this.productNamesForCompany(this.companyProductForm.companyName);
+  }
+
+  /** Product suggestions for the edit modal combobox. */
+  get productsForEditModalCompany(): string[] {
+    return this.productNamesForCompany(this.companyProductEditForm.companyName);
+  }
+
+  private productNamesForCompany(companyNameRaw: string): string[] {
+    const target = companyNameRaw.trim().toLowerCase();
     if (!target) {
       return [];
     }
@@ -137,6 +157,10 @@ export class WorkspaceComponent implements OnInit {
     }
   }
 
+  viewLeadDetail(leadId: string): void {
+    void this.router.navigate(['/leads', leadId]);
+  }
+
   private syncTabFromRoute(): void {
     let r: ActivatedRoute | null = this.route;
     while (r?.firstChild) {
@@ -145,6 +169,10 @@ export class WorkspaceComponent implements OnInit {
     const tab = r?.snapshot.data['workspaceTab'] as LeftTab | undefined;
     if (!tab || tab === this.activeTab) {
       return;
+    }
+    if (this.activeTab === 'company-config' && tab !== 'company-config') {
+      this.companyConfigDeleteTarget = null;
+      this.closeCompanyConfigEditModal();
     }
     this.activeTab = tab;
     if ((tab === 'dashboard' || tab === 'leads') && !this.data && !this.loading) {
@@ -526,6 +554,17 @@ export class WorkspaceComponent implements OnInit {
     this.companyProductForm.items.splice(index, 1);
   }
 
+  addEditEventItem(): void {
+    this.companyProductEditForm.items.push({ eventName: '', score: '' });
+  }
+
+  removeEditEventItem(index: number): void {
+    if (this.companyProductEditForm.items.length === 1) {
+      return;
+    }
+    this.companyProductEditForm.items.splice(index, 1);
+  }
+
   saveCompanyConfig(): void {
     this.configError = '';
     this.configSuccess = '';
@@ -568,14 +607,10 @@ export class WorkspaceComponent implements OnInit {
     };
 
     this.savingConfig = true;
-    const request$ = this.editingConfigId
-      ? this.http.put<CompanyProductConfig>(`${this.apiBase}/api/company-product-configs/${this.editingConfigId}`, payload)
-      : this.http.post<CompanyProductConfig>(`${this.apiBase}/api/company-product-configs`, payload);
-
-    request$.subscribe({
+    this.http.post<CompanyProductConfig>(`${this.apiBase}/api/company-product-configs`, payload).subscribe({
       next: () => {
         this.savingConfig = false;
-        this.configSuccess = this.editingConfigId ? 'Company product config updated.' : 'Company product config saved.';
+        this.configSuccess = 'Company product config saved.';
         this.resetCompanyConfigForm(companyName);
         this.companyNameFilter = companyName;
         this.loadCompanyConfigs();
@@ -583,31 +618,143 @@ export class WorkspaceComponent implements OnInit {
       },
       error: () => {
         this.savingConfig = false;
-        this.configError = this.editingConfigId
-          ? 'Failed to update config. Check API and values.'
-          : 'Failed to save config. Check API and values.';
+        this.configError = 'Failed to save config. Check API and values.';
       }
     });
   }
 
-  editCompanyConfig(config: CompanyProductConfig): void {
-    this.editingConfigId = config.id;
-    this.companyProductForm = {
-      companyName: config.companyName,
-      productName: config.productName,
-      items: this.eventConfigEntries(config.productEventConfig).map((x) => ({
-        eventName: x.key,
-        score: x.value
-      }))
+  saveCompanyConfigEditModal(): void {
+    const id = this.companyConfigEditModalId;
+    if (!id) {
+      return;
+    }
+
+    this.configEditModalError = '';
+
+    const companyName = this.companyProductEditForm.companyName.trim();
+    const productName = this.companyProductEditForm.productName.trim();
+    if (!companyName || !productName) {
+      this.configEditModalError = 'Company name and product name are required.';
+      return;
+    }
+
+    const eventPairs: { eventName: string; score: number }[] = [];
+    for (const item of this.companyProductEditForm.items) {
+      const eventName = item.eventName.trim();
+      if (!eventName) {
+        continue;
+      }
+      const num = item.score === '' ? NaN : Number(item.score);
+      if (!Number.isFinite(num) || num < 0) {
+        this.configEditModalError = 'Enter a score (0 or greater) for each event that has a name.';
+        return;
+      }
+      eventPairs.push({ eventName, score: num });
+    }
+
+    if (eventPairs.length === 0) {
+      this.configEditModalError = 'Add at least one event with a name and score.';
+      return;
+    }
+
+    const productEventConfig: Record<string, number> = {};
+    for (const item of eventPairs) {
+      productEventConfig[item.eventName] = Math.max(0, item.score);
+    }
+
+    const payload: UpsertCompanyProductConfigRequest = {
+      companyName,
+      productName,
+      productEventConfig
     };
-    this.configError = '';
-    this.configSuccess = 'Editing selected config.';
+
+    this.savingEditModal = true;
+    this.http.put<CompanyProductConfig>(`${this.apiBase}/api/company-product-configs/${id}`, payload).subscribe({
+      next: () => {
+        this.savingEditModal = false;
+        this.configSuccess = 'Company product config updated.';
+        this.configError = '';
+        this.companyNameFilter = companyName;
+        this.closeCompanyConfigEditModal();
+        this.loadCompanyConfigs();
+        this.refreshCompanyProductIndex();
+      },
+      error: () => {
+        this.savingEditModal = false;
+        this.configEditModalError = 'Failed to update config. Check API and values.';
+      }
+    });
   }
 
-  cancelCompanyConfigEdit(): void {
-    this.resetCompanyConfigForm();
+  openCompanyConfigEditModal(config: CompanyProductConfig): void {
+    this.companyConfigEditModalId = config.id;
+    const mapped = this.eventConfigEntries(config.productEventConfig).map((x) => ({
+      eventName: x.key,
+      score: x.value
+    }));
+    this.companyProductEditForm = {
+      companyName: config.companyName,
+      productName: config.productName,
+      items: mapped.length > 0 ? mapped : [{ eventName: '', score: '' }]
+    };
+    this.configEditModalError = '';
+  }
+
+  closeCompanyConfigEditModal(): void {
+    this.companyConfigEditModalId = null;
+    this.companyProductEditForm = {
+      companyName: '',
+      productName: '',
+      items: [{ eventName: '', score: '' }]
+    };
+    this.configEditModalError = '';
+    this.savingEditModal = false;
+  }
+
+  openCompanyConfigDeleteModal(config: CompanyProductConfig): void {
+    this.companyConfigDeleteTarget = config;
+  }
+
+  cancelCompanyConfigDeleteModal(): void {
+    this.companyConfigDeleteTarget = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeCloseCompanyConfigModals(): void {
+    if (this.companyConfigEditModalId) {
+      this.closeCompanyConfigEditModal();
+      return;
+    }
+    if (this.companyConfigDeleteTarget) {
+      this.cancelCompanyConfigDeleteModal();
+    }
+  }
+
+  confirmCompanyConfigDelete(): void {
+    const config = this.companyConfigDeleteTarget;
+    if (!config) {
+      return;
+    }
+    this.companyConfigDeleteTarget = null;
+
     this.configError = '';
-    this.configSuccess = 'Edit canceled.';
+    this.deletingConfigId = config.id;
+    this.http
+      .post<void>(`${this.apiBase}/api/company-product-configs/${config.id}/delete`, {})
+      .pipe(finalize(() => (this.deletingConfigId = null)))
+      .subscribe({
+        next: () => {
+          this.configSuccess = 'Configuration deleted.';
+          if (this.companyConfigEditModalId === config.id) {
+            this.closeCompanyConfigEditModal();
+          }
+          this.loadCompanyConfigs();
+          this.refreshCompanyProductIndex();
+        },
+        error: () => {
+          this.configError = 'Failed to delete configuration.';
+        }
+      });
   }
 
   loadCompanyConfigs(): void {
@@ -632,7 +779,6 @@ export class WorkspaceComponent implements OnInit {
   }
 
   private resetCompanyConfigForm(defaultCompanyName = ''): void {
-    this.editingConfigId = undefined;
     this.companyProductForm = {
       companyName: defaultCompanyName,
       productName: '',

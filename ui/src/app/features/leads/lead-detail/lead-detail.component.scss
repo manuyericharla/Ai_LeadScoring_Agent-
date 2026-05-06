@@ -1,0 +1,118 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.detail-summary {
+  margin-bottom: var(--section-gap-md);
+}
+
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-end;
+}
+
+.muted-lbl {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.summary-val {
+  display: flex;
+  align-items: center;
+}
+
+.summary-num {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-heading);
+}
+
+.events-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.events-table {
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.events-table thead th:nth-child(1),
+.events-table tbody td:nth-child(1) {
+  min-width: 10.5rem;
+}
+
+.events-table thead th:nth-child(2),
+.events-table tbody td:nth-child(2) {
+  min-width: 14rem;
+  max-width: 28rem;
+}
+
+.events-table thead th:nth-child(3),
+.events-table tbody td:nth-child(3),
+.events-table thead th:nth-child(4),
+.events-table tbody td:nth-child(4),
+.events-table thead th:nth-child(5),
+.events-table tbody td:nth-child(5) {
+  min-width: 7rem;
+}
+
+.events-table thead th:nth-child(6),
+.events-table tbody td:nth-child(6) {
+  min-width: 4.5rem;
+}
+
+.cell-dt {
+  font-size: var(--text-13);
+  color: var(--color-text-body);
+  white-space: nowrap;
+}
+
+.cell-what {
+  font-size: var(--text-13);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-heading);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-muted {
+  font-size: var(--text-13);
+  color: var(--color-text-muted);
+}
+
+.cell-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+.cell-badge {
+  vertical-align: middle;
+}
+
+.empty-msg {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+.flash {
+  margin-bottom: var(--space-3);
+}

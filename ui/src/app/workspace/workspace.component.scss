@@ -344,6 +344,19 @@
   color: var(--color-text-heading);
 }
 
+.leads-row--action {
+  cursor: pointer;
+}
+
+.leads-row--action:hover {
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.leads-row--action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 .cell-muted {
   font-size: var(--text-13);
   font-weight: var(--font-weight-regular);
@@ -783,6 +796,172 @@
   color: var(--color-text-muted);
 }
 
+/* Company Product Config list: column balance, top alignment, bounded event tags */
+.company-config-list-wrap ::ng-deep .app-table-shell {
+  .company-config-list-table {
+    table-layout: fixed;
+  }
+
+  col.ccl-col-company {
+    width: 15%;
+  }
+
+  col.ccl-col-product {
+    width: 15%;
+  }
+
+  col.ccl-col-created {
+    width: 10.5rem;
+  }
+
+  col.ccl-col-actions {
+    width: 8.75rem;
+  }
+
+  .company-config-list-table thead th {
+    color: var(--color-text-heading);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .company-config-list-table tbody td {
+    vertical-align: top;
+  }
+
+  .company-config-list-td-created {
+    white-space: nowrap;
+    font-size: var(--text-sm);
+  }
+
+  .company-config-list-td-actions {
+    white-space: nowrap;
+  }
+
+  .config-list-badges {
+    max-height: 10rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border-light);
+    background: var(--color-bg-page);
+    gap: var(--space-2);
+    align-content: flex-start;
+  }
+
+  .config-list-badges .badge {
+    font-size: var(--text-13);
+    padding: 0.2rem 0.55rem;
+    border-radius: var(--radius-md);
+  }
+}
+
+.company-config-list-td-clip {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.company-config-delete-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(3px);
+}
+
+.company-config-delete-modal__panel {
+  position: fixed;
+  z-index: 1050;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(calc(100vw - var(--space-8)), 26rem);
+  padding: var(--space-6);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.28);
+}
+
+.company-config-delete-modal__title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-text-heading);
+}
+
+.company-config-delete-modal__body {
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-body);
+}
+
+.company-config-delete-modal__body strong {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-heading);
+}
+
+.company-config-delete-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.company-config-edit-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(3px);
+}
+
+.company-config-edit-modal__panel {
+  position: fixed;
+  z-index: 1050;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(calc(100vw - var(--space-8)), 40rem);
+  max-height: min(calc(100vh - var(--space-8)), 44rem);
+  overflow-y: auto;
+  padding: var(--space-6);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.28);
+}
+
+.company-config-edit-modal__title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-text-heading);
+}
+
+.company-config-edit-modal__subtitle {
+  margin: 0 0 var(--space-5);
+}
+
+.company-config-edit-modal__event-section {
+  margin-top: var(--space-5);
+}
+
+.company-config-edit-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-light);
+}
+
 .config-list-badges {
   display: flex;
   flex-wrap: wrap;
@@ -792,6 +971,13 @@
 .config-list-events-empty {
   font-size: var(--text-base);
   color: var(--color-text-muted);
+}
+
+.config-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  align-items: center;
 }
 
 /* Breakpoints align with styles/tokens.scss */

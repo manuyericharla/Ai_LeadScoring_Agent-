@@ -252,7 +252,16 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let lead of paginatedLeads">
+            <tr
+              *ngFor="let lead of paginatedLeads"
+              class="leads-row--action"
+              (click)="viewLeadDetail(lead.id)"
+              (keydown.enter)="viewLeadDetail(lead.id)"
+              (keydown.space)="$event.preventDefault(); viewLeadDetail(lead.id)"
+              tabindex="0"
+              role="link"
+              [attr.aria-label]="'Open lead details for ' + lead.email"
+            >
               <td class="cell-email lt-cell-email-full" [attr.title]="lead.email">{{ lead.email }}</td>
               <td class="lt-td-badge">
                 <app-badge [score]="lead.score">{{ lead.score }}</app-badge>
@@ -314,29 +323,28 @@
       <div class="info-banner__text">
         <p class="info-banner__title">How to add a company product config</p>
         <p class="info-banner__body">
-          Choose <strong>company</strong> and <strong>product</strong> from the dropdowns. Add each funnel event you care about—like “Pricing page” or “Book demo”—and give it a score of <strong>0 or higher</strong>. Submit to save; your configs show up in the <strong>list below</strong>, where you can filter or edit.
+          Enter or pick a <strong>company</strong> and <strong>product</strong> (saved names appear as suggestions). Add each funnel event you care about—like “Pricing page” or “Book demo”—and give it a score of <strong>0 or higher</strong>. Submit to save; your configs show up in the <strong>list below</strong>, where you can filter or edit.
         </p>
       </div>
     </div>
-    <p class="hint-msg" *ngIf="editingConfigId">Editing existing config — add/remove items and update scores.</p>
     <div class="config-form-grid">
       <app-combobox
         label="Company Name"
         [required]="true"
         name="ccfCompany"
-        placeholder="Choose company"
+        placeholder="Type or choose company"
         [(ngModel)]="companyProductForm.companyName"
         [options]="distinctCompanyNames"
-        [allowCustomValue]="false"
+        [allowCustomValue]="true"
       />
       <app-combobox
         label="Product Name"
         [required]="true"
         name="ccfProduct"
-        placeholder="Choose product"
+        placeholder="Type or choose product"
         [(ngModel)]="companyProductForm.productName"
         [options]="productsForSelectedCompany"
-        [allowCustomValue]="false"
+        [allowCustomValue]="true"
       />
     </div>
     <div class="event-config-section">
@@ -384,9 +392,8 @@
     </div>
     <div class="config-actions">
       <app-button variant="primary" type="button" (click)="saveCompanyConfig()" [loading]="savingConfig" [disabled]="savingConfig">
-        {{ editingConfigId ? 'Update Config' : 'Submit Config' }}
+        Submit Config
       </app-button>
-      <app-button *ngIf="editingConfigId" variant="ghost" type="button" [disabled]="savingConfig" (click)="cancelCompanyConfigEdit()">Cancel edit</app-button>
     </div>
     <p class="flash flash-success" *ngIf="configSuccess">{{ configSuccess }}</p>
     <p class="flash flash-error" *ngIf="configError">{{ configError }}</p>
@@ -398,41 +405,70 @@
       <app-button variant="primary" size="sm" type="button" (click)="loadCompanyConfigs()">Apply Filter</app-button>
     </div>
     <p class="caption-muted" *ngIf="configLoading">Loading configurations…</p>
-    <app-table *ngIf="!configLoading && companyConfigs.length > 0">
-      <table>
-        <thead>
-          <tr>
-            <th>Company</th>
-            <th>Product</th>
-            <th>Event config</th>
-            <th>Created</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let config of companyConfigs">
-            <td class="cell-body-sm">{{ config.companyName }}</td>
-            <td class="cell-body-sm">{{ config.productName }}</td>
-            <td>
-              @let evs = eventConfigEntries(config.productEventConfig);
-              @if (evs.length > 0) {
-                <div class="config-list-badges">
-                  @for (evt of evs; track evt.key) {
-                    <app-badge [score]="evt.value">{{ evt.key }}: {{ evt.value }}</app-badge>
-                  }
-                </div>
-              } @else {
-                <span class="config-list-events-empty">—</span>
-              }
-            </td>
-            <td class="cell-muted">{{ config.createdAtUtc | date: 'MMM d, y, h:mm a' }}</td>
-            <td>
-              <app-button variant="secondary" size="sm" type="button" (click)="editCompanyConfig(config)">Edit</app-button>
+    <div class="company-config-list-wrap" *ngIf="!configLoading && companyConfigs.length > 0">
+      <app-table>
+        <table class="company-config-list-table">
+          <colgroup>
+            <col class="ccl-col-company" />
+            <col class="ccl-col-product" />
+            <col class="ccl-col-events" />
+            <col class="ccl-col-created" />
+            <col class="ccl-col-actions" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">Company</th>
+              <th scope="col">Product</th>
+              <th scope="col">Event config</th>
+              <th scope="col">Created</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let config of companyConfigs">
+              <td class="cell-body-sm company-config-list-td-clip" [attr.title]="config.companyName">{{ config.companyName }}</td>
+              <td class="cell-body-sm company-config-list-td-clip" [attr.title]="config.productName">{{ config.productName }}</td>
+              <td class="company-config-list-td-events">
+                @let evs = eventConfigEntries(config.productEventConfig);
+                @if (evs.length > 0) {
+                  <div class="config-list-badges">
+                    @for (evt of evs; track evt.key) {
+                      <app-badge [score]="evt.value">{{ evt.key }}: {{ evt.value }}</app-badge>
+                    }
+                  </div>
+                } @else {
+                  <span class="config-list-events-empty">—</span>
+                }
+              </td>
+            <td class="cell-muted company-config-list-td-created">{{ config.createdAtUtc | date: 'MMM d, y, h:mm a' }}</td>
+            <td class="company-config-list-td-actions">
+              <div class="config-row-actions">
+                <app-button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  [disabled]="deletingConfigId !== null || companyConfigDeleteTarget !== null || companyConfigEditModalId !== null"
+                  (click)="openCompanyConfigEditModal(config)"
+                >
+                  Edit
+                </app-button>
+                <app-button
+                  variant="danger"
+                  size="sm"
+                  type="button"
+                  [loading]="deletingConfigId === config.id"
+                  [disabled]="deletingConfigId !== null || companyConfigDeleteTarget !== null || companyConfigEditModalId !== null"
+                  (click)="openCompanyConfigDeleteModal(config)"
+                >
+                  Delete
+                </app-button>
+              </div>
             </td>
           </tr>
         </tbody>
-      </table>
-    </app-table>
+        </table>
+      </app-table>
+    </div>
 
     <div class="empty-state" *ngIf="!configLoading && companyConfigs.length === 0">
       <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.25">
@@ -442,6 +478,120 @@
       <p>Add your first product config above</p>
     </div>
   </app-card>
+
+  @if (companyConfigEditModalId) {
+    <div class="company-config-edit-modal" aria-live="polite">
+      <div
+        class="company-config-edit-modal__backdrop"
+        role="presentation"
+        tabindex="-1"
+        (click)="closeCompanyConfigEditModal()"
+      ></div>
+      <div
+        class="company-config-edit-modal__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="company-config-edit-title"
+      >
+        <h2 id="company-config-edit-title" class="company-config-edit-modal__title">Edit company product config</h2>
+        <p class="company-config-edit-modal__subtitle caption-muted">Update company, product, and event scores. Changes apply when you save.</p>
+
+        <div class="config-form-grid">
+          <app-combobox
+            label="Company Name"
+            [required]="true"
+            name="ccfCompanyEdit"
+            placeholder="Type or choose company"
+            [(ngModel)]="companyProductEditForm.companyName"
+            [options]="distinctCompanyNames"
+            [allowCustomValue]="true"
+          />
+          <app-combobox
+            label="Product Name"
+            [required]="true"
+            name="ccfProductEdit"
+            placeholder="Type or choose product"
+            [(ngModel)]="companyProductEditForm.productName"
+            [options]="productsForEditModalCompany"
+            [allowCustomValue]="true"
+          />
+        </div>
+
+        <div class="event-config-section company-config-edit-modal__event-section">
+          <h3 class="subsection-title">Product Event Config (Event → Score)</h3>
+          <p class="event-config-hint caption-muted">Add events and a score each (0 or greater).</p>
+          <app-table>
+            <table>
+              <thead>
+                <tr>
+                  <th>Event name</th>
+                  <th>Score</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let item of companyProductEditForm.items; let i = index">
+                  <td>
+                    <app-input label="" [(ngModel)]="item.eventName" [name]="'evnEdit' + i" placeholder="Pricing page / Book demo / Sign up..." />
+                  </td>
+                  <td style="max-width: 120px">
+                    <app-input
+                      type="number"
+                      [min]="0"
+                      label=""
+                      placeholder="e.g. 10"
+                      [(ngModel)]="item.score"
+                      [name]="'evsEdit' + i"
+                      [inputStyle]="{ width: '100%', maxWidth: '100px' }"
+                    />
+                  </td>
+                  <td>
+                    <app-button variant="danger" size="sm" type="button" (click)="removeEditEventItem(i)" [disabled]="companyProductEditForm.items.length === 1">
+                      Remove
+                    </app-button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="event-score-table-toolbar">
+              <app-button variant="secondary" type="button" (click)="addEditEventItem()">+ Add Item</app-button>
+            </div>
+          </app-table>
+        </div>
+
+        <p class="flash flash-error" *ngIf="configEditModalError">{{ configEditModalError }}</p>
+
+        <div class="company-config-edit-modal__actions">
+          <app-button variant="ghost" type="button" [disabled]="savingEditModal" (click)="closeCompanyConfigEditModal()">Cancel</app-button>
+          <app-button variant="primary" type="button" (click)="saveCompanyConfigEditModal()" [loading]="savingEditModal" [disabled]="savingEditModal">
+            Update Config
+          </app-button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (companyConfigDeleteTarget; as del) {
+    <div class="company-config-delete-modal" aria-live="polite">
+      <div class="company-config-delete-modal__backdrop" role="presentation" tabindex="-1" (click)="cancelCompanyConfigDeleteModal()"></div>
+      <div
+        class="company-config-delete-modal__panel"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="company-config-delete-title"
+      >
+        <h2 id="company-config-delete-title" class="company-config-delete-modal__title">Delete this configuration?</h2>
+        <p class="company-config-delete-modal__body">
+          This removes the mapping for <strong>{{ del.companyName }}</strong> / <strong>{{ del.productName }}</strong>. This cannot be undone.
+        </p>
+        <div class="company-config-delete-modal__actions">
+          <app-button variant="secondary" type="button" (click)="cancelCompanyConfigDeleteModal()">Cancel</app-button>
+          <app-button variant="danger" type="button" (click)="confirmCompanyConfigDelete()">Delete</app-button>
+        </div>
+      </div>
+    </div>
+  }
+
 </div>
 
 <div *ngIf="activeTab === 'tracking-links'">

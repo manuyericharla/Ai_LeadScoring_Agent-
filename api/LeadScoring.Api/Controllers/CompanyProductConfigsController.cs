@@ -117,6 +117,28 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
         return Ok(records);
     }
 
+    [HttpDelete("{id:guid}")]
+    public Task<IActionResult> Delete(Guid id) => DeleteImplAsync(id);
+
+    /// <summary>
+    /// POST alias for deletes (SPA uses this so the path does not collide with PUT {id}; also works when proxies block DELETE).
+    /// </summary>
+    [HttpPost("{id:guid}/delete")]
+    public Task<IActionResult> DeletePost(Guid id) => DeleteImplAsync(id);
+
+    private async Task<IActionResult> DeleteImplAsync(Guid id)
+    {
+        var entity = await db.CompanyProductConfigs.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+        {
+            return NotFound("Company product config not found.");
+        }
+
+        db.CompanyProductConfigs.Remove(entity);
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
     private static bool TryNormalizeRequest(
         UpsertCompanyProductConfigRequest request,
         out Dictionary<string, int> normalizedItems,

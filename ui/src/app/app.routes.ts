@@ -11,6 +11,11 @@ export const routes: Routes = [
   },
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
   dashboardRoute,
+  {
+    path: 'leads/:leadId',
+    loadComponent: () =>
+      import('./features/leads/lead-detail/lead-detail.component').then((m) => m.LeadDetailComponent)
+  },
   leadsRoute,
   { path: 'settings', children: settingsChildRoutes },
   { path: '**', redirectTo: 'dashboard' }

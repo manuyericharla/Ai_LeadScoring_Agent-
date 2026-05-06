@@ -1,3 +1,4 @@
+using LeadScoring.Api;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Services;
@@ -13,6 +14,53 @@ public class LeadsController(
     LeadImportService leadImportService,
     VisitorAttributionService visitorAttributionService) : ControllerBase
 {
+    [HttpGet("{leadId:guid}/events")]
+    public async Task<ActionResult<LeadEventsResponse>> GetLeadEvents(Guid leadId)
+    {
+        var lead = await db.Leads
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == leadId);
+
+        if (lead is null)
+        {
+            return NotFound(new { message = "Lead not found." });
+        }
+
+        var raw = await db.Events
+            .AsNoTracking()
+            .Where(e => e.LeadId == leadId)
+            .OrderBy(e => e.TimestampUtc)
+            .Select(e => new
+            {
+                e.Id,
+                e.TimestampUtc,
+                e.EventScore,
+                e.Type,
+                e.Source,
+                e.Campaign,
+                e.MetadataJson
+            })
+            .ToListAsync();
+
+        var events = raw
+            .Select(e => new LeadEventDetailDto(
+                e.Id,
+                e.TimestampUtc,
+                e.EventScore,
+                e.Type.ToString(),
+                LeadEventDisplay.FormatSource(e.Source),
+                string.IsNullOrWhiteSpace(e.Campaign) ? null : e.Campaign.Trim(),
+                LeadEventDisplay.DescribeWhat(e.MetadataJson, e.Type)))
+            .ToList();
+
+        return Ok(new LeadEventsResponse(
+            lead.Id,
+            lead.Email,
+            lead.Score,
+            lead.Stage.ToString(),
+            events));
+    }
+
     [HttpPost("email-exists")]
     public async Task<ActionResult<LeadEmailExistsResponse>> CheckEmailExists([FromBody] LeadEmailExistsRequest request)
     {
