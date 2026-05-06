@@ -63,7 +63,12 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
     public Task<EmailTemplate?> GetActiveTemplateForStageAsync(LeadStage stage, int? productId, CancellationToken cancellationToken)
     {
         return db.EmailTemplates
-            .Where(t => t.IsActive && t.Stage == stage && (t.ProductId == productId || t.ProductId == null))
+            .Where(t =>
+                t.IsActive &&
+                !t.IsFollowUp &&
+                !EF.Functions.ILike(t.Name, "%dummy%") &&
+                t.Stage == stage &&
+                (t.ProductId == productId || t.ProductId == null))
             .OrderByDescending(t => t.ProductId == productId)
             .ThenByDescending(t => t.UpdatedAt ?? t.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
