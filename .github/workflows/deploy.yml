@@ -89,10 +89,19 @@ jobs:
           df -h || true
           docker system df || true
 
+          # Remove any old LeadScoring containers/images first.
+          docker ps -aq --filter "name=leadscoring-" | xargs -r docker rm -f || true
+          docker images --format '{{.Repository}}:{{.Tag}}' | sed -n '/^leadscoring-/p' | xargs -r docker rmi -f || true
+
+          # Clear local workspace artifacts that may consume runner disk.
+          shopt -s globstar nullglob
+          rm -rf ./api/**/bin ./api/**/obj ./api/_build_verify* ./ui/node_modules ./ui/dist ./ui/.angular || true
+
           # Free dangling/unused Docker resources on self-hosted runner.
           docker container prune -f || true
           docker image prune -af || true
           docker builder prune -af || true
+          docker buildx prune -af || true
           docker volume prune -f || true
 
           echo "Disk usage after cleanup:"
