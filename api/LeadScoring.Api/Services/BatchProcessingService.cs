@@ -190,7 +190,9 @@ public class BatchProcessingService(
     private static List<BatchType> GetWindowsToRun(BatchConfig config, DateTime nowUtc)
     {
         var windows = new List<BatchType>();
-        if (ShouldRun(config.Day, config.UpdatedAt, nowUtc, DayInterval))
+        // Daily mode is treated as "process incremental leads each worker cycle".
+        // Interval gating here can delay same-day new leads until the next day.
+        if (config.Day)
         {
             windows.Add(BatchType.Daily);
         }
