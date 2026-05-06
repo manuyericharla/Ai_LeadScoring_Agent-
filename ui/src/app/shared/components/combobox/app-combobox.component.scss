@@ -98,11 +98,10 @@
 .chev-icon {
   width: 18px;
   height: 18px;
-  transition: transform 0.15s ease;
+  transition: color 0.15s ease;
 }
 
 .control.is-open .chev-icon {
-  transform: rotate(180deg);
   color: var(--color-primary);
 }
 
@@ -120,7 +119,7 @@
   left: 0;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 100;
+  z-index: 5000;
   margin: 0;
   padding: var(--space-1) 0;
   list-style: none;

@@ -31,36 +31,86 @@
     </app-card>
   </div>
 
-  <app-card heading="Events">
+  <app-card>
+    <div class="events-head-row">
+      <h2 class="events-section-title">Events</h2>
+      <div class="events-toolbar" *ngIf="payload.events.length > 0">
+        <div class="pager-strip">
+          <div class="rows-wrap">
+            <span>Time</span>
+            <app-combobox
+              name="leadEventsTimeSort"
+              class="pager-filter-combobox"
+              placeholder="Newest first"
+              [(ngModel)]="timeSortOrder"
+              [allowCustomValue]="false"
+              [options]="timeSortOptions"
+              [optionLabelFn]="timeSortLabelFn"
+            />
+          </div>
+          <div class="rows-wrap">
+            <span>Source</span>
+            <app-combobox
+              name="leadEventsSourceFilter"
+              class="pager-filter-combobox"
+              placeholder="All sources"
+              [(ngModel)]="eventsSourceFilter"
+              (ngModelChange)="onEventsSourceFilterChange()"
+              [allowCustomValue]="false"
+              [options]="eventsSourceComboboxOptions"
+              [optionLabelFn]="eventsSourceComboboxLabelFn"
+            />
+          </div>
+          <div class="rows-wrap">
+            <span>Campaign</span>
+            <app-combobox
+              name="leadEventsCampaignFilter"
+              class="pager-filter-combobox"
+              placeholder="All campaigns"
+              [(ngModel)]="eventsCampaignFilter"
+              [allowCustomValue]="false"
+              [options]="eventsCampaignComboboxOptions"
+              [optionLabelFn]="eventsCampaignComboboxLabelFn"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="events-table-wrap" *ngIf="payload.events.length > 0; else noEvents">
-      <app-table>
-        <table class="events-table">
-          <thead>
-            <tr>
-              <th scope="col">Time (UTC)</th>
-              <th scope="col">What</th>
-              <th scope="col">Type</th>
-              <th scope="col">Source</th>
-              <th scope="col">Campaign</th>
-              <th scope="col">Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (ev of payload.events; track ev.id) {
+      @if (displayedEvents.length === 0) {
+        <p class="filter-empty-msg">No events match the selected filters.</p>
+      } @else {
+        <app-table>
+          <table class="events-table">
+            <thead>
               <tr>
-                <td class="cell-dt" [attr.title]="ev.timestampUtc | date: 'full'">{{ ev.timestampUtc | date: 'MM/dd/yy, HH:mm:ss' }}</td>
-                <td class="cell-what" [attr.title]="ev.what">{{ ev.what }}</td>
-                <td class="cell-muted">{{ ev.eventType }}</td>
-                <td class="cell-muted">{{ ev.source }}</td>
-                <td class="cell-muted cell-ellipsis" [attr.title]="ev.campaign || ''">{{ ev.campaign || '—' }}</td>
-                <td class="cell-badge">
-                  <app-badge [score]="ev.eventScore">{{ ev.eventScore }}</app-badge>
-                </td>
+                <th scope="col" [attr.aria-sort]="timeSortOrder === 'desc' ? 'descending' : 'ascending'">
+                  Time (UTC)
+                </th>
+                <th scope="col">Clicked event</th>
+                <th scope="col">Type</th>
+                <th scope="col">Source</th>
+                <th scope="col">Campaign</th>
+                <th scope="col">Score</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </app-table>
+            </thead>
+            <tbody>
+              @for (ev of displayedEvents; track ev.id) {
+                <tr>
+                  <td class="cell-dt" [attr.title]="ev.timestampUtc | date: 'full'">{{ ev.timestampUtc | date: 'MM/dd/yy, HH:mm:ss' }}</td>
+                  <td class="cell-what" [attr.title]="ev.what">{{ ev.what }}</td>
+                  <td class="cell-muted">{{ ev.eventType }}</td>
+                  <td class="cell-muted">{{ ev.source }}</td>
+                  <td class="cell-muted cell-ellipsis" [attr.title]="ev.campaign || ''">{{ ev.campaign || '—' }}</td>
+                  <td class="cell-badge">
+                    <app-badge [score]="ev.eventScore">{{ ev.eventScore }}</app-badge>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </app-table>
+      }
     </div>
     <ng-template #noEvents>
       <p class="empty-msg">No events recorded for this lead yet.</p>

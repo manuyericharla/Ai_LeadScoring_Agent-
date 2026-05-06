@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { DecimalPipe, DatePipe, NgFor, NgIf } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -38,11 +38,14 @@ import { WorkspaceTopBarComponent } from './workspace-top-bar/workspace-top-bar.
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.scss'
 })
-export class WorkspaceComponent implements OnInit {
+export class WorkspaceComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private copyFlashTimer?: ReturnType<typeof setTimeout>;
+  /** Debounced reload for company-config list search (ms). */
+  private static readonly companyConfigFilterDebounceMs = 320;
+  private companyConfigFilterSearchTimer?: ReturnType<typeof setTimeout>;
   apiBase = this.resolveApiBase();
   loading = false;
   error = '';
@@ -183,6 +186,16 @@ export class WorkspaceComponent implements OnInit {
     }
     if (tab === 'company-config') {
       this.refreshCompanyProductIndex();
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.companyConfigFilterSearchTimer !== undefined) {
+      clearTimeout(this.companyConfigFilterSearchTimer);
+      this.companyConfigFilterSearchTimer = undefined;
+    }
+    if (this.copyFlashTimer !== undefined) {
+      clearTimeout(this.copyFlashTimer);
     }
   }
 
@@ -612,7 +625,6 @@ export class WorkspaceComponent implements OnInit {
         this.savingConfig = false;
         this.configSuccess = 'Company product config saved.';
         this.resetCompanyConfigForm(companyName);
-        this.companyNameFilter = companyName;
         this.loadCompanyConfigs();
         this.refreshCompanyProductIndex();
       },
@@ -674,7 +686,6 @@ export class WorkspaceComponent implements OnInit {
         this.savingEditModal = false;
         this.configSuccess = 'Company product config updated.';
         this.configError = '';
-        this.companyNameFilter = companyName;
         this.closeCompanyConfigEditModal();
         this.loadCompanyConfigs();
         this.refreshCompanyProductIndex();
@@ -755,6 +766,16 @@ export class WorkspaceComponent implements OnInit {
           this.configError = 'Failed to delete configuration.';
         }
       });
+  }
+
+  onCompanyConfigFilterInput(): void {
+    if (this.companyConfigFilterSearchTimer !== undefined) {
+      clearTimeout(this.companyConfigFilterSearchTimer);
+    }
+    this.companyConfigFilterSearchTimer = setTimeout(() => {
+      this.companyConfigFilterSearchTimer = undefined;
+      this.loadCompanyConfigs();
+    }, WorkspaceComponent.companyConfigFilterDebounceMs);
   }
 
   loadCompanyConfigs(): void {

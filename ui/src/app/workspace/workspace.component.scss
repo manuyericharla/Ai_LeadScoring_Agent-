@@ -583,17 +583,15 @@
   margin-top: var(--space-4);
 }
 
-.filter-inline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
+.company-config-list-filter {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
 
-.filter-inline app-input {
-  flex: 1;
-  min-width: 220px;
+  app-input {
+    display: block;
+    max-width: min(26rem, 100%);
+  }
 }
 
 .empty-state {

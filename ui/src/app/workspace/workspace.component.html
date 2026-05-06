@@ -400,9 +400,15 @@
   </app-card>
 
   <app-card heading="Company Product Config List">
-    <div class="filter-inline">
-      <app-input placeholder="Filter by company..." [(ngModel)]="companyNameFilter" name="compFilterInp" />
-      <app-button variant="primary" size="sm" type="button" (click)="loadCompanyConfigs()">Apply Filter</app-button>
+    <div class="company-config-list-filter" role="search" aria-label="Filter list by company">
+      <app-input
+        label="Company"
+        placeholder="Search…"
+        [fullWidth]="true"
+        [(ngModel)]="companyNameFilter"
+        (ngModelChange)="onCompanyConfigFilterInput()"
+        name="compFilterInp"
+      />
     </div>
     <p class="caption-muted" *ngIf="configLoading">Loading configurations…</p>
     <div class="company-config-list-wrap" *ngIf="!configLoading && companyConfigs.length > 0">
