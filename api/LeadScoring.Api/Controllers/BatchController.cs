@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LeadScoring.Api.Controllers;
 
 [ApiController]
-[Route("batch")]
+[Route("api/batch")]
 public class BatchController(IBatchProcessingService batchProcessingService, ILogger<BatchController> logger) : ControllerBase
 {
     [HttpGet("history")]

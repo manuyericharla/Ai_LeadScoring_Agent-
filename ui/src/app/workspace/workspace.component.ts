@@ -989,7 +989,7 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     this.manualError = '';
     this.manualLoading = true;
     this.http
-      .get<BatchPreviewResult>(`${this.apiBase}/batch/preview?batchType=${encodeURIComponent(this.manualBatchType)}`)
+      .get<BatchPreviewResult>(`${this.apiBase}/api/batch/preview?batchType=${encodeURIComponent(this.manualBatchType)}`)
       .pipe(finalize(() => (this.manualLoading = false)))
       .subscribe({
         next: (res) => {
@@ -1091,7 +1091,7 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     this.manualLoading = true;
     this.manualRunResult = undefined;
     this.http
-      .post<BatchManualRunStart>(`${this.apiBase}/batch/run-manual/start?batchType=${encodeURIComponent(this.manualBatchType)}`, (() => {
+      .post<BatchManualRunStart>(`${this.apiBase}/api/batch/run-manual/start?batchType=${encodeURIComponent(this.manualBatchType)}`, (() => {
         const n = this.manualSelectedBucketCount;
         const take = Math.min(Math.max(1, Math.floor(this.manualLeadTakeCount)), n);
         const payload: { scope: ManualScope; maxLeads?: number } = { scope: this.manualScope };
@@ -1127,7 +1127,7 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
 
     const poll = (): void => {
       this.http
-        .get<BatchManualRunStatus>(`${this.apiBase}/batch/run-manual/status/${encodeURIComponent(jobId)}`)
+        .get<BatchManualRunStatus>(`${this.apiBase}/api/batch/run-manual/status/${encodeURIComponent(jobId)}`)
         .subscribe({
           next: (status) => {
             this.manualRunStatus = status;
@@ -1168,7 +1168,7 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     this.batchLogHistoryLoading = true;
     this.batchLogHistoryError = '';
     this.http
-      .get<BatchLogHistoryRow[]>(`${this.apiBase}/batch/history?take=200`)
+      .get<BatchLogHistoryRow[]>(`${this.apiBase}/api/batch/history?take=200`)
       .pipe(finalize(() => (this.batchLogHistoryLoading = false)))
       .subscribe({
         next: (rows) => {
