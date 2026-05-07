@@ -9,16 +9,29 @@ public class BatchWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var intervalMinutes = configuration.GetValue<int?>("BatchProcessing:IntervalMinutes") ?? 5;
-        if (intervalMinutes < 1)
+        var schedule = configuration["BatchProcessing:DailyRunTimeUtc"] ?? "00:30";
+        if (!TimeSpan.TryParse(schedule, out var runAtUtc))
         {
-            intervalMinutes = 1;
+            runAtUtc = new TimeSpan(0, 30, 0);
         }
 
-        logger.LogInformation("Batch worker started. Interval={IntervalMinutes} minute(s).", intervalMinutes);
+        logger.LogInformation("Batch worker started. DailyRunTimeUtc={DailyRunTimeUtc}.", runAtUtc);
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var nowUtc = DateTime.UtcNow;
+            var nextRunUtc = nowUtc.Date.Add(runAtUtc);
+            if (nextRunUtc <= nowUtc)
+            {
+                nextRunUtc = nextRunUtc.AddDays(1);
+            }
+
+            var delay = nextRunUtc - nowUtc;
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay, stoppingToken);
+            }
+
             try
             {
                 using var scope = scopeFactory.CreateScope();
@@ -29,8 +42,6 @@ public class BatchWorker(
             {
                 logger.LogError(ex, "Batch worker cycle failed.");
             }
-
-            await Task.Delay(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
         }
     }
 }

@@ -47,7 +47,6 @@ else
 {
     builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 }
-builder.Services.AddHostedService<InactivityWorker>();
 builder.Services.AddHostedService<BatchWorker>();
 var configuredCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 var allowedCorsOrigins = new HashSet<string>(configuredCorsOrigins, StringComparer.OrdinalIgnoreCase);

@@ -4,6 +4,25 @@ namespace LeadScoring.Api.Repositories;
 
 public interface IBatchRepository
 {
+    Task<bool> HasBatchRunOnDateAsync(DateTime runDateUtc, CancellationToken cancellationToken);
+    Task<CampaignBatchType?> GetLastCompletedDailyBatchTypeAsync(CancellationToken cancellationToken);
+    Task<List<Lead>> GetDay1LeadsAsync(DateTime runDateUtc, CancellationToken cancellationToken);
+    Task<List<Lead>> GetDay2LeadsAsync(DateTime runDateUtc, CancellationToken cancellationToken);
+    Task<List<Lead>> GetDay3LeadsAsync(DateTime runDateUtc, CancellationToken cancellationToken);
+    Task<List<Lead>> GetDay4LeadsAsync(DateTime runDateUtc, CancellationToken cancellationToken);
+    Task<bool> HasBatchMarkerEventAsync(Guid leadId, string marker, DateTime fromUtc, CancellationToken cancellationToken);
+    Task<bool> HasEngagementSinceLastEmailAsync(Guid leadId, DateTime lastEmailSentUtc, CancellationToken cancellationToken);
+    Task<EmailTemplate?> GetTemplateByBatchTypeAsync(CampaignBatchType batchType, Lead lead, CancellationToken cancellationToken);
+    Task<BatchLog> CreateBatchLogAsync(BatchLog batchLog, CancellationToken cancellationToken);
+    Task<AdminBatchReport> UpsertAdminReportAsync(
+        string email,
+        int stage0Count,
+        int stage1Count,
+        int stage2Count,
+        int stage3Count,
+        int stage4Count,
+        CancellationToken cancellationToken);
+
     Task<List<BatchConfig>> GetActiveConfigsAsync(CancellationToken cancellationToken);
     Task<Batch?> GetBatchByIdAsync(long batchId, CancellationToken cancellationToken);
     Task<List<Lead>> GetLeadsAfterAsync(int productId, LeadStage stage, DateTime sinceUtc, CancellationToken cancellationToken);

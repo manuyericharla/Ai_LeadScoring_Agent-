@@ -12,6 +12,8 @@ public class LeadScoringDbContext(DbContextOptions<LeadScoringDbContext> options
     public DbSet<BatchConfig> BatchConfigs => Set<BatchConfig>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<BatchLead> BatchLeads => Set<BatchLead>();
+    public DbSet<BatchLog> BatchLogs => Set<BatchLog>();
+    public DbSet<AdminBatchReport> AdminBatchReports => Set<AdminBatchReport>();
     public DbSet<LeadVisitorMap> LeadVisitorMaps => Set<LeadVisitorMap>();
     public DbSet<Visitor> Visitors => Set<Visitor>();
 
@@ -19,6 +21,9 @@ public class LeadScoringDbContext(DbContextOptions<LeadScoringDbContext> options
     {
         modelBuilder.Entity<Lead>().HasIndex(x => x.Email).IsUnique();
         modelBuilder.Entity<Lead>().HasIndex(x => x.VisitorId);
+        modelBuilder.Entity<Lead>().HasIndex(x => new { x.Stage, x.CreatedAtUtc });
+        modelBuilder.Entity<Lead>().HasIndex(x => new { x.WelcomeEmailSent, x.LastActivityUtc });
+        modelBuilder.Entity<Lead>().HasIndex(x => x.LastEmailSentDateUtc);
         modelBuilder.Entity<LeadEvent>().HasIndex(x => new { x.LeadId, x.Type, x.TimestampUtc });
         modelBuilder.Entity<LeadEvent>().HasIndex(x => x.VisitorId);
         modelBuilder.Entity<CompanyProductConfig>().HasIndex(x => new { x.CompanyName, x.ProductName, x.ProductId }).IsUnique();
@@ -48,6 +53,13 @@ public class LeadScoringDbContext(DbContextOptions<LeadScoringDbContext> options
             .WithMany(x => x.BatchLeads)
             .HasForeignKey(x => x.LeadId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<BatchLog>().HasKey(x => x.BatchId);
+        modelBuilder.Entity<BatchLog>().HasIndex(x => new { x.RunDate, x.BatchType }).IsUnique();
+        modelBuilder.Entity<BatchLog>().HasIndex(x => x.RunDate);
+
+        modelBuilder.Entity<AdminBatchReport>().HasKey(x => x.Id);
+        modelBuilder.Entity<AdminBatchReport>().HasIndex(x => x.Email).IsUnique();
 
         modelBuilder.Entity<LeadVisitorMap>().HasKey(x => x.Id);
         modelBuilder.Entity<LeadVisitorMap>()

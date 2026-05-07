@@ -15,6 +15,8 @@ public class Lead
     public LeadStage Stage { get; set; } = LeadStage.Cold;
     public DateTime CreatedAtUtc { get; set; }
     public DateTime LastActivityUtc { get; set; }
+    public DateTime? LastEmailSentDateUtc { get; set; }
+    public DateTime? NextEmailSendDateUtc { get; set; }
     public DateTime? LastScoredAtUtc { get; set; }
     public bool UserExists { get; set; }
     public bool SignupCompleted { get; set; }
