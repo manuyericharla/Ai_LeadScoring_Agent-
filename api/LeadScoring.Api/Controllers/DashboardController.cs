@@ -27,12 +27,15 @@ public class DashboardController(LeadScoringDbContext db) : ControllerBase
                 .OrderByDescending(e => e.TimestampUtc)
                 .Select(e => e.Campaign)
                 .FirstOrDefault()
+            let eventScoreSum = db.Events
+                .Where(e => e.LeadId == l.Id)
+                .Sum(e => e.EventScore)
             let src = lastEv != null ? (EventSource?)lastEv.Source : l.LastSource
             orderby l.LastActivityUtc descending
             select new LeadDashboardDto(
                 l.Id,
                 l.Email,
-                l.Score,
+                eventScoreSum,
                 l.Stage.ToString(),
                 l.LastActivityUtc,
                 l.LastScoredAtUtc,

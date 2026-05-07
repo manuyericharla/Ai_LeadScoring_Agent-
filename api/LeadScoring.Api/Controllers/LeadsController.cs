@@ -53,10 +53,12 @@ public class LeadsController(
                 LeadEventDisplay.DescribeWhat(e.MetadataJson, e.Type)))
             .ToList();
 
+        var totalScoreFromEvents = raw.Sum(e => e.EventScore);
+
         return Ok(new LeadEventsResponse(
             lead.Id,
             lead.Email,
-            lead.Score,
+            totalScoreFromEvents,
             lead.Stage.ToString(),
             events));
     }
