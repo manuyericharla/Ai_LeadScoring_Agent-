@@ -6,7 +6,6 @@ using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace LeadScoring.Api.Services;
 
@@ -37,7 +36,6 @@ public class BatchProcessingService(
         var success = 0;
         var failed = 0;
         var stageCounts = new int[5];
-        var successTemplateContexts = new ConcurrentBag<BatchLeadTemplateContext>();
 
         foreach (var lead in leads)
         {
@@ -62,7 +60,7 @@ public class BatchProcessingService(
             processed++;
             stageCounts[MapStage(lead.Stage)]++;
 
-            var sendResult = await ProcessLeadForBatchAsync(lead, batchType, marker, cancellationToken, successTemplateContexts);
+            var sendResult = await ProcessLeadForBatchAsync(lead, batchType, marker, cancellationToken);
             if (sendResult)
             {
                 success++;
@@ -82,15 +80,7 @@ public class BatchProcessingService(
             FailureCount = failed
         }, cancellationToken);
 
-        await SendAdminSummaryAsync(
-            runDateUtc,
-            batchType,
-            processed,
-            success,
-            failed,
-            stageCounts,
-            successTemplateContexts,
-            cancellationToken);
+        await SendAdminSummaryAsync(runDateUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
     }
 
     public async Task<BatchPreviewResultDto> PreviewAsync(CampaignBatchType batchType, CancellationToken cancellationToken)
@@ -129,7 +119,6 @@ public class BatchProcessingService(
         var failed = 0;
         var failures = new ConcurrentBag<BatchFailureInfoDto>();
         var stageCounts = new int[5];
-        var successTemplateContexts = new ConcurrentBag<BatchLeadTemplateContext>();
         var maxParallelism = Math.Clamp(configuration.GetValue<int?>("BatchProcessing:ManualMaxParallelism") ?? 5, 1, 20);
 
         await Parallel.ForEachAsync(
@@ -146,7 +135,7 @@ public class BatchProcessingService(
             Interlocked.Increment(ref processed);
             Interlocked.Increment(ref stageCounts[MapStage(lead.Stage)]);
 
-            var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct, successTemplateContexts);
+            var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct);
             if (sent)
             {
                 Interlocked.Increment(ref success);
@@ -167,7 +156,7 @@ public class BatchProcessingService(
             FailureCount = failed
         }, cancellationToken);
 
-        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, successTemplateContexts, cancellationToken);
+        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
 
         return new BatchManualRunResultDto(
             batchType,
@@ -241,7 +230,6 @@ public class BatchProcessingService(
         var failed = 0;
         var failures = new ConcurrentBag<BatchFailureInfoDto>();
         var stageCounts = new int[5];
-        var successTemplateContexts = new ConcurrentBag<BatchLeadTemplateContext>();
         var maxParallelism = Math.Clamp(configuration.GetValue<int?>("BatchProcessing:ManualMaxParallelism") ?? 5, 1, 20);
 
         await Parallel.ForEachAsync(
@@ -258,7 +246,7 @@ public class BatchProcessingService(
                 Interlocked.Increment(ref processed);
                 Interlocked.Increment(ref stageCounts[MapStage(lead.Stage)]);
 
-                var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct, successTemplateContexts);
+                var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct);
                 if (sent)
                 {
                     Interlocked.Increment(ref success);
@@ -281,7 +269,7 @@ public class BatchProcessingService(
             FailureCount = failed
         }, cancellationToken);
 
-        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, successTemplateContexts, cancellationToken);
+        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
 
         return new BatchManualRunResultDto(
             batchType,
@@ -291,12 +279,7 @@ public class BatchProcessingService(
             failures.ToList());
     }
 
-    private async Task<bool> ProcessLeadInIsolatedScopeAsync(
-        Guid leadId,
-        CampaignBatchType batchType,
-        string marker,
-        CancellationToken cancellationToken,
-        ConcurrentBag<BatchLeadTemplateContext>? successTemplateContexts = null)
+    private async Task<bool> ProcessLeadInIsolatedScopeAsync(Guid leadId, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var scopedRepository = scope.ServiceProvider.GetRequiredService<IBatchRepository>();
@@ -307,7 +290,7 @@ public class BatchProcessingService(
             return false;
         }
 
-        return await ProcessLeadForBatchAsync(scopedRepository, lead, batchType, marker, cancellationToken, successTemplateContexts);
+        return await ProcessLeadForBatchAsync(scopedRepository, lead, batchType, marker, cancellationToken);
     }
 
     private async Task<List<Lead>> FilterManualLeadsByScopeAsync(
@@ -475,20 +458,11 @@ public class BatchProcessingService(
             retryBatch.Status);
     }
 
-    private async Task<bool> ProcessLeadForBatchAsync(Lead lead, CampaignBatchType batchType, string marker, CancellationToken cancellationToken, ConcurrentBag<BatchLeadTemplateContext>? successTemplateContexts = null)
-        => await ProcessLeadForBatchAsync(batchRepository, lead, batchType, marker, cancellationToken, successTemplateContexts);
+    private async Task<bool> ProcessLeadForBatchAsync(Lead lead, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
+        => await ProcessLeadForBatchAsync(batchRepository, lead, batchType, marker, cancellationToken);
 
-    private async Task<bool> ProcessLeadForBatchAsync(
-        IBatchRepository repository,
-        Lead lead,
-        CampaignBatchType batchType,
-        string marker,
-        CancellationToken cancellationToken,
-        ConcurrentBag<BatchLeadTemplateContext>? successTemplateContexts = null)
+    private async Task<bool> ProcessLeadForBatchAsync(IBatchRepository repository, Lead lead, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
     {
-        var stageUsedForTemplate = lead.Stage;
-        var productUsedForTemplate = lead.ProductId;
-
         var template = await repository.GetTemplateByBatchTypeAsync(batchType, lead, cancellationToken);
         if (template is null)
         {
@@ -503,8 +477,6 @@ public class BatchProcessingService(
         {
             return false;
         }
-
-        successTemplateContexts?.Add(new BatchLeadTemplateContext(stageUsedForTemplate, productUsedForTemplate));
 
         var sentAtUtc = DateTime.UtcNow;
         lead.LastEmailSentDateUtc = sentAtUtc;
@@ -568,7 +540,6 @@ public class BatchProcessingService(
         int successCount,
         int failureCount,
         IReadOnlyList<int> stageCounts,
-        ConcurrentBag<BatchLeadTemplateContext> successTemplateContexts,
         CancellationToken cancellationToken)
     {
         var adminEmailConfig = configuration["BatchProcessing:AdminEmail"];
@@ -605,11 +576,7 @@ public class BatchProcessingService(
         }
 
         var subject = $"[Batch Summary] {FormatCampaignBatchTypeLabel(batchType)} — {runDateUtc.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)}";
-        var recipientSections = await BuildRecipientPreviewSectionsAsync(
-            batchType,
-            stageCounts,
-            successTemplateContexts,
-            cancellationToken).ConfigureAwait(false);
+        var recipientSections = await BuildRecipientPreviewSectionsAsync(batchType, stageCounts, cancellationToken).ConfigureAwait(false);
         var body = BuildBatchSummaryEmailHtml(
             runDateUtc,
             batchType,
@@ -675,17 +642,16 @@ public class BatchProcessingService(
     private async Task<string> BuildRecipientPreviewSectionsAsync(
         CampaignBatchType batchType,
         IReadOnlyList<int> stageCounts,
-        ConcurrentBag<BatchLeadTemplateContext> successTemplateContexts,
         CancellationToken cancellationToken)
     {
-        var previewContexts = ResolvePreviewTemplateContexts(successTemplateContexts, batchType, stageCounts);
+        var stages = GetPreviewStagesForRecipientEmail(batchType, stageCounts);
         var seenTemplates = new HashSet<int>();
         var sections = new StringBuilder();
 
-        foreach (var ctx in previewContexts)
+        foreach (var stage in stages)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var sampleLead = CreateSamplePreviewLead(ctx.StageUsedForTemplate, ctx.ProductId);
+            var sampleLead = CreateSamplePreviewLead(stage);
             var template = await batchRepository.GetTemplateByBatchTypeAsync(batchType, sampleLead, cancellationToken).ConfigureAwait(false);
             if (template is null || !seenTemplates.Add(template.TemplateId))
             {
@@ -693,10 +659,9 @@ public class BatchProcessingService(
             }
 
             var bodyHtml = ComposeBatchEmailHtml(template, sampleLead, batchType, useTrackedCta: false);
-            var fragment = ExtractEmailBodyInnerFragment(bodyHtml);
             var subjectText = WebUtility.HtmlEncode(template.Subject);
             var templateName = WebUtility.HtmlEncode(template.Name);
-            var audienceHint = WebUtility.HtmlEncode(DescribePreviewAudience(batchType, ctx.StageUsedForTemplate, ctx.ProductId));
+            var audienceHint = WebUtility.HtmlEncode(DescribePreviewAudience(batchType, stage));
 
             sections.Append(CultureInfo.InvariantCulture, $"""
 
@@ -716,11 +681,11 @@ public class BatchProcessingService(
 <span style="display:block;margin-top:4px;font-size:14px;color:#d8f3ff;font-weight:600;">{templateName}</span>
 <span style="display:block;margin-top:12px;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Subject line</span>
 <span style="display:block;margin-top:4px;font-size:15px;line-height:1.35;color:#ffffff;">{subjectText}</span>
-<span style="display:block;margin-top:14px;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Message body (same as sent)</span>
-<span style="display:block;margin-top:6px;font-size:11px;line-height:1.45;color:#8db6c9;">Preview uses sample merge data. Live sends use tracked links per recipient where enabled.</span>
+<span style="display:block;margin-top:14px;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Message body</span>
+<span style="display:block;margin-top:6px;font-size:11px;line-height:1.45;color:#8db6c9;">Preview uses sample merge data (e.g. example email). Live sends use tracking on links where enabled.</span>
 <div style="margin-top:12px;background-color:#ffffff;border-radius:6px;padding:14px;color:#022232;font-family:Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;">
 """);
-            sections.Append(fragment);
+            sections.Append(bodyHtml);
             sections.Append("""
 </div>
 </td>
@@ -735,114 +700,50 @@ public class BatchProcessingService(
         return sections.Length == 0 ? string.Empty : sections.ToString();
     }
 
-    private static List<BatchLeadTemplateContext> ResolvePreviewTemplateContexts(
-        ConcurrentBag<BatchLeadTemplateContext> successTemplateContexts,
-        CampaignBatchType batchType,
-        IReadOnlyList<int> stageCounts)
-    {
-        var raw = successTemplateContexts.ToArray();
-        if (raw.Length > 0)
-        {
-            return raw
-                .Distinct()
-                .OrderBy(x => (int)x.StageUsedForTemplate)
-                .ThenBy(x => x.ProductId is null ? 0 : 1)
-                .ThenBy(x => x.ProductId ?? 0)
-                .ToList();
-        }
-
-        return FallbackPreviewTemplateContexts(batchType, stageCounts);
-    }
-
-    private static List<BatchLeadTemplateContext> FallbackPreviewTemplateContexts(
-        CampaignBatchType batchType,
-        IReadOnlyList<int> stageCounts)
-    {
-        switch (batchType)
-        {
-            case CampaignBatchType.Day1:
-            case CampaignBatchType.Day2:
-                return new List<BatchLeadTemplateContext> { new(LeadStage.Cold, null) };
-            case CampaignBatchType.Day3:
-                return new[]
-                {
-                    LeadStage.Cold,
-                    LeadStage.Warm,
-                    LeadStage.Mql,
-                    LeadStage.Hot
-                }.Where(s => stageCounts[MapStage(s)] > 0).Select(s => new BatchLeadTemplateContext(s, null)).ToList();
-            case CampaignBatchType.Day4:
-                return new[] { LeadStage.Mql, LeadStage.Hot }
-                    .Where(s => stageCounts[MapStage(s)] > 0)
-                    .Select(s => new BatchLeadTemplateContext(s, null))
-                    .ToList();
-            default:
-                return new List<BatchLeadTemplateContext>();
-        }
-    }
-
-    private static string ExtractEmailBodyInnerFragment(string html)
-    {
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return html ?? string.Empty;
-        }
-
-        var openBody = Regex.Match(html, "(?is)<body[^>]*>");
-        if (!openBody.Success)
-        {
-            return html.Trim();
-        }
-
-        var innerStart = openBody.Index + openBody.Length;
-        var closeIdx = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-        if (closeIdx <= innerStart)
-        {
-            return html.Trim();
-        }
-
-        return html[innerStart..closeIdx].Trim();
-    }
-
-    private static Lead CreateSamplePreviewLead(LeadStage stage, int? productId) => new()
+    private static Lead CreateSamplePreviewLead(LeadStage stage) => new()
     {
         Id = Guid.Parse("00000000-0000-4000-8000-000000000001"),
         Email = "recipient@example.com",
         FirstName = "Jordan",
         LastName = "Sample",
         Stage = stage,
-        ProductId = productId
+        ProductId = null
     };
 
-    private static string DescribePreviewAudience(CampaignBatchType batchType, LeadStage stage, int? productId)
+    private static IEnumerable<LeadStage> GetPreviewStagesForRecipientEmail(
+        CampaignBatchType batchType,
+        IReadOnlyList<int> stageCounts)
     {
-        var baseText = batchType switch
+        return batchType switch
         {
-            CampaignBatchType.Day1 or CampaignBatchType.Day2 => "Cold leads — same template as in this batch run.",
-            CampaignBatchType.Day3 => stage switch
-            {
-                LeadStage.Cold => "Cold stage template (used for Cold leads on Day 3).",
-                LeadStage.Warm => "Warm stage template (used for Warm leads on Day 3).",
-                LeadStage.Mql => "MQL stage template (used for MQL leads on Day 3).",
-                LeadStage.Hot => "Hot stage template (used for Hot leads on Day 3).",
-                _ => "Stage-specific template."
-            },
-            CampaignBatchType.Day4 => stage switch
-            {
-                LeadStage.Mql => "Follow-up template for engaged MQL leads without recent activity.",
-                LeadStage.Hot => "Follow-up template for engaged Hot leads without recent activity.",
-                _ => "Follow-up template."
-            },
-            _ => $"Template selected for audience in {stage} stage."
+            CampaignBatchType.Day1 or CampaignBatchType.Day2 => new[] { LeadStage.Cold },
+            CampaignBatchType.Day3 => new[] { LeadStage.Cold, LeadStage.Warm, LeadStage.Mql, LeadStage.Hot }
+                .Where(s => stageCounts[MapStage(s)] > 0),
+            CampaignBatchType.Day4 => new[] { LeadStage.Mql, LeadStage.Hot }
+                .Where(s => stageCounts[MapStage(s)] > 0),
+            _ => Enumerable.Empty<LeadStage>()
         };
-
-        if (productId is int pid)
-        {
-            return $"{baseText} Product ID {pid}.";
-        }
-
-        return baseText;
     }
+
+    private static string DescribePreviewAudience(CampaignBatchType batchType, LeadStage stage) => batchType switch
+    {
+        CampaignBatchType.Day1 or CampaignBatchType.Day2 => "Cold leads — same template as in this batch run.",
+        CampaignBatchType.Day3 => stage switch
+        {
+            LeadStage.Cold => "Cold stage template (used for Cold leads on Day 3).",
+            LeadStage.Warm => "Warm stage template (used for Warm leads on Day 3).",
+            LeadStage.Mql => "MQL stage template (used for MQL leads on Day 3).",
+            LeadStage.Hot => "Hot stage template (used for Hot leads on Day 3).",
+            _ => "Stage-specific template."
+        },
+        CampaignBatchType.Day4 => stage switch
+        {
+            LeadStage.Mql => "Follow-up template for engaged MQL leads without recent activity.",
+            LeadStage.Hot => "Follow-up template for engaged Hot leads without recent activity.",
+            _ => "Follow-up template."
+        },
+        _ => $"Template selected for audience in {stage} stage."
+    };
 
     private async Task<CampaignBatchType> GetNextBatchTypeAsync(CancellationToken cancellationToken)
     {
@@ -870,8 +771,7 @@ public class BatchProcessingService(
     }
 
     /// <summary>
-    /// Advances only the category stage after successful batch send (Cold→Warm→Mql→Hot).
-    /// Does not alter total score.
+    /// Matches dashboard "next stage" (Cold→Warm→Mql→Hot). Keeps score in sync so a later scoring event does not immediately downgrade the stage.
     /// </summary>
     private static void AdvanceStageAfterSuccessfulBatchSend(Lead lead)
     {
@@ -880,12 +780,15 @@ public class BatchProcessingService(
         {
             case LeadStage.Cold:
                 lead.Stage = LeadStage.Warm;
+                lead.Score = Math.Max(lead.Score, 31);
                 break;
             case LeadStage.Warm:
                 lead.Stage = LeadStage.Mql;
+                lead.Score = Math.Max(lead.Score, 61);
                 break;
             case LeadStage.Mql:
                 lead.Stage = LeadStage.Hot;
+                lead.Score = Math.Max(lead.Score, 100);
                 break;
             case LeadStage.Hot:
                 break;
@@ -1054,6 +957,4 @@ public class BatchProcessingService(
         var trackingBaseUrl = (configuration["Tracking:BaseUrl"] ?? "http://localhost:8211").TrimEnd('/');
         return $"{trackingBaseUrl}/track/click?token={Uri.EscapeDataString(token)}&redirect={Uri.EscapeDataString(destinationUrl)}";
     }
-
-    private readonly record struct BatchLeadTemplateContext(LeadStage StageUsedForTemplate, int? ProductId);
 }
