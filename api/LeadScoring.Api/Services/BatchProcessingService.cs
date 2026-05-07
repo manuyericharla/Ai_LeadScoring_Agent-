@@ -870,7 +870,8 @@ public class BatchProcessingService(
     }
 
     /// <summary>
-    /// Matches dashboard "next stage" (Cold→Warm→Mql→Hot). Keeps score in sync so a later scoring event does not immediately downgrade the stage.
+    /// Advances only the category stage after successful batch send (Cold→Warm→Mql→Hot).
+    /// Does not alter total score.
     /// </summary>
     private static void AdvanceStageAfterSuccessfulBatchSend(Lead lead)
     {
@@ -879,15 +880,12 @@ public class BatchProcessingService(
         {
             case LeadStage.Cold:
                 lead.Stage = LeadStage.Warm;
-                lead.Score = Math.Max(lead.Score, 31);
                 break;
             case LeadStage.Warm:
                 lead.Stage = LeadStage.Mql;
-                lead.Score = Math.Max(lead.Score, 61);
                 break;
             case LeadStage.Mql:
                 lead.Stage = LeadStage.Hot;
-                lead.Score = Math.Max(lead.Score, 100);
                 break;
             case LeadStage.Hot:
                 break;

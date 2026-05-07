@@ -156,7 +156,9 @@ public class LeadScoringService(
             var attemptNumber = sentTodayCount + 1;
             var eventName = $"welcome_followup_{attemptNumber}";
             var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
-            if (!string.IsNullOrWhiteSpace(template.CtaButtonText) && !string.IsNullOrWhiteSpace(template.CtaLink))
+            if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
+                !string.IsNullOrWhiteSpace(template.CtaLink) &&
+                !ContainsInlineCta(resolvedBody))
             {
                 var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
                 var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
@@ -199,9 +201,9 @@ public class LeadScoringService(
     {
         return score switch
         {
-            <= 30 => LeadStage.Cold,
-            <= 60 => LeadStage.Warm,
-            <= 99 => LeadStage.Mql,
+            <= 50 => LeadStage.Cold,
+            <= 100 => LeadStage.Warm,
+            <= 150 => LeadStage.Mql,
             _ => LeadStage.Hot
         };
     }
@@ -365,7 +367,9 @@ public class LeadScoringService(
         var eventName = $"lead_stage_{lead.Stage.ToString().ToLowerInvariant()}";
         var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
 
-        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) && !string.IsNullOrWhiteSpace(template.CtaLink))
+        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
+            !string.IsNullOrWhiteSpace(template.CtaLink) &&
+            !ContainsInlineCta(resolvedBody))
         {
             var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
             var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
@@ -399,6 +403,17 @@ public class LeadScoringService(
             .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{stage}}", lead.Stage.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsInlineCta(string htmlBody)
+    {
+        if (string.IsNullOrWhiteSpace(htmlBody))
+        {
+            return false;
+        }
+
+        return htmlBody.Contains("<a ", StringComparison.OrdinalIgnoreCase) ||
+               htmlBody.Contains("class=\"cta-button\"", StringComparison.OrdinalIgnoreCase);
     }
 
     private string BuildTrackedClickUrl(Lead lead, string destinationUrl)
