@@ -28,6 +28,8 @@ public interface IBatchRepository
         int stage4Count,
         CancellationToken cancellationToken);
 
+    Task<List<string>> GetAdminReportEmailsAsync(CancellationToken cancellationToken);
+
     Task<List<BatchConfig>> GetActiveConfigsAsync(CancellationToken cancellationToken);
     Task<Batch?> GetBatchByIdAsync(long batchId, CancellationToken cancellationToken);
     Task<List<Lead>> GetLeadsAfterAsync(int productId, LeadStage stage, DateTime sinceUtc, CancellationToken cancellationToken);

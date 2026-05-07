@@ -89,6 +89,26 @@ var app = builder.Build();
 app.UseRouting();
 app.UseCors();
 
+// Authenticated JSON endpoints must not be cached by browsers/CDNs/reverse proxies.
+// Without this, conditional GETs (If-None-Match / If-Modified-Since) can return 304 with no
+// body, which Angular HttpClient surfaces as a load failure (e.g. "Could not load ...").
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var path = context.Request.Path.Value ?? string.Empty;
+        if (!path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase) &&
+            !path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0";
+            context.Response.Headers["Pragma"] = "no-cache";
+            context.Response.Headers["Expires"] = "0";
+        }
+        return Task.CompletedTask;
+    });
+    await next();
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

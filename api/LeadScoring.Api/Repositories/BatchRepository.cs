@@ -228,6 +228,15 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
         return entity;
     }
 
+    public Task<List<string>> GetAdminReportEmailsAsync(CancellationToken cancellationToken)
+    {
+        return db.AdminBatchReports
+            .AsNoTracking()
+            .Where(x => x.Email != null && x.Email != string.Empty)
+            .Select(x => x.Email)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<List<BatchConfig>> GetActiveConfigsAsync(CancellationToken cancellationToken)
     {
         return db.BatchConfigs

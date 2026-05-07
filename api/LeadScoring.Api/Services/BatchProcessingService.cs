@@ -552,21 +552,23 @@ public class BatchProcessingService(
         CancellationToken cancellationToken)
     {
         var adminEmailConfig = configuration["BatchProcessing:AdminEmail"];
-        if (string.IsNullOrWhiteSpace(adminEmailConfig))
-        {
-            logger.LogWarning("BatchProcessing:AdminEmail is not configured.");
-            return;
-        }
-
-        var adminRecipients = adminEmailConfig
+        var configuredRecipients = (adminEmailConfig ?? string.Empty)
             .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        var storedRecipients = await batchRepository.GetAdminReportEmailsAsync(cancellationToken);
+
+        var adminRecipients = configuredRecipients
+            .Concat(storedRecipients)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         if (adminRecipients.Count == 0)
         {
-            logger.LogWarning("BatchProcessing:AdminEmail is configured but no valid recipients were found.");
+            logger.LogWarning("No admin recipients found in BatchProcessing:AdminEmail or AdminBatchReports table.");
             return;
         }
 
