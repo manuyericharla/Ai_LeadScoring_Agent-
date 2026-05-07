@@ -481,7 +481,6 @@ public class BatchProcessingService(
         var sentAtUtc = DateTime.UtcNow;
         lead.LastEmailSentDateUtc = sentAtUtc;
         lead.LastActivityUtc = sentAtUtc;
-        AdvanceStageAfterSuccessfulBatchSend(lead);
         if (batchType == CampaignBatchType.Day1)
         {
             lead.WelcomeEmailSent = true;
@@ -768,38 +767,6 @@ public class BatchProcessingService(
             CampaignBatchType.Day4 => await batchRepository.GetDay4LeadsAsync(runDateUtc, cancellationToken),
             _ => []
         };
-    }
-
-    /// <summary>
-    /// Matches dashboard "next stage" (Cold→Warm→Mql→Hot). Keeps score in sync so a later scoring event does not immediately downgrade the stage.
-    /// </summary>
-    private static void AdvanceStageAfterSuccessfulBatchSend(Lead lead)
-    {
-        var before = lead.Stage;
-        switch (lead.Stage)
-        {
-            case LeadStage.Cold:
-                lead.Stage = LeadStage.Warm;
-                lead.Score = Math.Max(lead.Score, 31);
-                break;
-            case LeadStage.Warm:
-                lead.Stage = LeadStage.Mql;
-                lead.Score = Math.Max(lead.Score, 61);
-                break;
-            case LeadStage.Mql:
-                lead.Stage = LeadStage.Hot;
-                lead.Score = Math.Max(lead.Score, 100);
-                break;
-            case LeadStage.Hot:
-                break;
-            default:
-                return;
-        }
-
-        if (before != lead.Stage)
-        {
-            lead.LastScoredAtUtc = DateTime.UtcNow;
-        }
     }
 
     private static string FormatCampaignBatchTypeLabel(CampaignBatchType batchType) => batchType switch
