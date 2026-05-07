@@ -9,6 +9,11 @@ export const settingsChildRoutes: Routes = [
     data: { workspaceTab: 'company-config' as const }
   },
   {
+    path: 'manual-batch',
+    component: WorkspaceComponent,
+    data: { workspaceTab: 'manual-batch' as const }
+  },
+  {
     path: 'tracking-links',
     component: WorkspaceComponent,
     data: { workspaceTab: 'tracking-links' as const }

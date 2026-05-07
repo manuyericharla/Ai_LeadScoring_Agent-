@@ -6,13 +6,21 @@
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: var(--space-4);
   margin-bottom: var(--section-gap-md);
 }
 
 .kpi-card--dim {
   opacity: 0.82;
+}
+
+.kpi-card--clickable {
+  cursor: pointer;
+}
+
+.kpi-card--clickable:hover {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .kpi-card--dim .kpi-value {
@@ -58,6 +66,11 @@
   color: #be123c;
 }
 
+.kpi-icon--signedup {
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+}
+
 .kpi-foot {
   margin: 0;
   font-size: var(--text-xs);
@@ -83,7 +96,7 @@
 
 .dashboard-visuals {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--section-gap-md);
 }
@@ -794,6 +807,19 @@
   color: var(--color-text-muted);
 }
 
+.manual-scope-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.manual-scope-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+}
+
 /* Company Product Config list: column balance, top alignment, bounded event tags */
 .company-config-list-wrap ::ng-deep .app-table-shell {
   .company-config-list-table {
@@ -985,7 +1011,7 @@
   }
 
   .dashboard-visuals {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -995,6 +1021,10 @@
   }
 
   .ev-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-visuals {
     grid-template-columns: 1fr;
   }
 

@@ -1,6 +1,7 @@
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Models;
 using LeadScoring.Api.Repositories;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Mail;
 
@@ -11,7 +12,9 @@ public class BatchProcessingService(
     IEmailService emailService,
     TokenService tokenService,
     IConfiguration configuration,
-    ILogger<BatchProcessingService> logger) : IBatchProcessingService
+    ILogger<BatchProcessingService> logger,
+    IServiceScopeFactory scopeFactory,
+    ManualBatchProgressStore progressStore) : IBatchProcessingService
 {
     public async Task ProcessActiveConfigsAsync(CancellationToken cancellationToken)
     {
@@ -76,6 +79,305 @@ public class BatchProcessingService(
         }, cancellationToken);
 
         await SendAdminSummaryAsync(runDateUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
+    }
+
+    public async Task<BatchPreviewResultDto> PreviewAsync(CampaignBatchType batchType, CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
+        var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
+
+        var stage0Count = allLeads.Count(x => x.Stage == LeadStage.Cold);
+        var stage1Count = allLeads.Count(x => x.Stage == LeadStage.Warm);
+        var stage2Count = allLeads.Count(x => x.Stage == LeadStage.Mql);
+        var stage3Count = allLeads.Count(x => x.Stage == LeadStage.Hot);
+        var stage4Count = allLeads.Count - stage0Count - stage1Count - stage2Count - stage3Count;
+
+        var newLeadsCount = allLeads.Count(x => x.CreatedAtUtc >= nowUtc.AddDays(-1));
+        var last2DaysInactiveCount = allLeads.Count(x => x.LastActivityUtc <= nowUtc.AddDays(-2));
+        var last4DaysSinceLastEmailCount = allLeads.Count(x => x.LastEmailSentDateUtc.HasValue && x.LastEmailSentDateUtc <= nowUtc.AddDays(-4));
+
+        var didNotOpenCount = 0;
+        foreach (var lead in allLeads.Where(x => x.LastEmailSentDateUtc.HasValue))
+        {
+            if (lead.LastEmailSentDateUtc is null)
+            {
+                continue;
+            }
+
+            var hasEngagement = await batchRepository.HasEngagementSinceLastEmailAsync(
+                lead.Id,
+                lead.LastEmailSentDateUtc.Value,
+                cancellationToken);
+            if (!hasEngagement)
+            {
+                didNotOpenCount++;
+            }
+        }
+
+        return new BatchPreviewResultDto(
+            batchType,
+            allLeads.Count,
+            stage0Count,
+            stage1Count,
+            stage2Count,
+            stage3Count,
+            stage4Count,
+            newLeadsCount,
+            last2DaysInactiveCount,
+            last4DaysSinceLastEmailCount,
+            didNotOpenCount,
+            eligibleLeads.Count);
+    }
+
+    public async Task<BatchManualRunResultDto> RunManualAsync(CampaignBatchType batchType, string? scope, CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
+        var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
+        var leads = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, scope, nowUtc, cancellationToken);
+        var marker = $"DailySequence_{batchType}_Manual_{nowUtc:yyyyMMddHHmmss}";
+
+        var processed = 0;
+        var success = 0;
+        var failed = 0;
+        var failures = new ConcurrentBag<BatchFailureInfoDto>();
+        var stageCounts = new int[5];
+        var maxParallelism = Math.Clamp(configuration.GetValue<int?>("BatchProcessing:ManualMaxParallelism") ?? 5, 1, 20);
+
+        await Parallel.ForEachAsync(
+            leads,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = maxParallelism,
+                CancellationToken = cancellationToken
+            },
+            async (lead, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
+
+            Interlocked.Increment(ref processed);
+            Interlocked.Increment(ref stageCounts[MapStage(lead.Stage)]);
+
+            var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct);
+            if (sent)
+            {
+                Interlocked.Increment(ref success);
+            }
+            else
+            {
+                Interlocked.Increment(ref failed);
+                failures.Add(new BatchFailureInfoDto(lead.Id, lead.Email, "Max retries exceeded or template missing."));
+            }
+        });
+
+        await batchRepository.CreateBatchLogAsync(new BatchLog
+        {
+            RunDate = nowUtc,
+            BatchType = batchType,
+            TotalLeadsProcessed = processed,
+            SuccessCount = success,
+            FailureCount = failed
+        }, cancellationToken);
+
+        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
+
+        return new BatchManualRunResultDto(
+            batchType,
+            processed,
+            success,
+            failed,
+            failures.ToList());
+    }
+
+    public async Task<BatchManualRunStartDto> StartManualAsync(CampaignBatchType batchType, string? scope, CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var normalizedScope = string.IsNullOrWhiteSpace(scope) ? "TotalEligible" : scope.Trim();
+        var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
+        var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
+        var leads = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, normalizedScope, nowUtc, cancellationToken);
+        var state = progressStore.CreateJob(batchType, normalizedScope, leads.Count);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var scopedService = scope.ServiceProvider.GetRequiredService<IBatchProcessingService>();
+                var result = await scopedService.RunManualTrackedAsync(state.JobId, batchType, normalizedScope, CancellationToken.None);
+                progressStore.Complete(state.JobId, result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Manual batch background job failed for {BatchType}. JobId={JobId}", batchType, state.JobId);
+                progressStore.Fail(state.JobId);
+            }
+        });
+
+        return new BatchManualRunStartDto(state.JobId, batchType, normalizedScope);
+    }
+
+    public BatchManualRunStatusDto? GetManualStatus(Guid jobId) => progressStore.GetStatus(jobId);
+
+    public async Task<BatchManualRunResultDto> RunManualTrackedAsync(Guid jobId, CampaignBatchType batchType, string? scope, CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
+        var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
+        var leads = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, scope, nowUtc, cancellationToken);
+        var marker = $"DailySequence_{batchType}_Manual_{nowUtc:yyyyMMddHHmmss}";
+
+        var processed = 0;
+        var success = 0;
+        var failed = 0;
+        var failures = new ConcurrentBag<BatchFailureInfoDto>();
+        var stageCounts = new int[5];
+        var maxParallelism = Math.Clamp(configuration.GetValue<int?>("BatchProcessing:ManualMaxParallelism") ?? 5, 1, 20);
+
+        await Parallel.ForEachAsync(
+            leads,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = maxParallelism,
+                CancellationToken = cancellationToken
+            },
+            async (lead, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+
+                Interlocked.Increment(ref processed);
+                Interlocked.Increment(ref stageCounts[MapStage(lead.Stage)]);
+
+                var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct);
+                if (sent)
+                {
+                    Interlocked.Increment(ref success);
+                }
+                else
+                {
+                    Interlocked.Increment(ref failed);
+                    failures.Add(new BatchFailureInfoDto(lead.Id, lead.Email, "Max retries exceeded or template missing."));
+                }
+
+                progressStore.IncrementProcessed(jobId, sent);
+            });
+
+        await batchRepository.CreateBatchLogAsync(new BatchLog
+        {
+            RunDate = nowUtc,
+            BatchType = batchType,
+            TotalLeadsProcessed = processed,
+            SuccessCount = success,
+            FailureCount = failed
+        }, cancellationToken);
+
+        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
+
+        return new BatchManualRunResultDto(
+            batchType,
+            processed,
+            success,
+            failed,
+            failures.ToList());
+    }
+
+    private async Task<bool> ProcessLeadInIsolatedScopeAsync(Guid leadId, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var scopedRepository = scope.ServiceProvider.GetRequiredService<IBatchRepository>();
+
+        var lead = await scopedRepository.GetLeadForUpdateAsync(leadId, cancellationToken);
+        if (lead is null)
+        {
+            return false;
+        }
+
+        return await ProcessLeadForBatchAsync(scopedRepository, lead, batchType, marker, cancellationToken);
+    }
+
+    private async Task<List<Lead>> FilterManualLeadsByScopeAsync(
+        List<Lead> eligibleLeads,
+        List<Lead> allLeads,
+        string? scope,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(scope) || scope.Equals("TotalEligible", StringComparison.OrdinalIgnoreCase))
+        {
+            return eligibleLeads;
+        }
+
+        if (scope.Equals("TotalLeads", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads;
+        }
+
+        if (scope.Equals("Stage0", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads.Where(x => x.Stage == LeadStage.Cold).ToList();
+        }
+
+        if (scope.Equals("Stage1", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads.Where(x => x.Stage == LeadStage.Warm).ToList();
+        }
+
+        if (scope.Equals("Stage2", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads.Where(x => x.Stage == LeadStage.Mql).ToList();
+        }
+
+        if (scope.Equals("Stage3", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads.Where(x => x.Stage == LeadStage.Hot).ToList();
+        }
+
+        if (scope.Equals("Stage4", StringComparison.OrdinalIgnoreCase))
+        {
+            var known = new HashSet<LeadStage> { LeadStage.Cold, LeadStage.Warm, LeadStage.Mql, LeadStage.Hot };
+            return allLeads.Where(x => !known.Contains(x.Stage)).ToList();
+        }
+
+        if (scope.Equals("NewLeads", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads.Where(x => x.CreatedAtUtc >= nowUtc.AddDays(-1)).ToList();
+        }
+
+        if (scope.Equals("Last2DaysInactive", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads.Where(x => x.LastActivityUtc <= nowUtc.AddDays(-2)).ToList();
+        }
+
+        if (scope.Equals("Last4DaysSinceEmail", StringComparison.OrdinalIgnoreCase))
+        {
+            return allLeads.Where(x => x.LastEmailSentDateUtc.HasValue && x.LastEmailSentDateUtc <= nowUtc.AddDays(-4)).ToList();
+        }
+
+        if (scope.Equals("DidNotOpenEmail", StringComparison.OrdinalIgnoreCase))
+        {
+            var result = new List<Lead>();
+            foreach (var lead in allLeads.Where(x => x.LastEmailSentDateUtc.HasValue))
+            {
+                if (!lead.LastEmailSentDateUtc.HasValue)
+                {
+                    continue;
+                }
+
+                var hasEngagement = await batchRepository.HasEngagementSinceLastEmailAsync(
+                    lead.Id,
+                    lead.LastEmailSentDateUtc.Value,
+                    cancellationToken);
+                if (!hasEngagement)
+                {
+                    result.Add(lead);
+                }
+            }
+
+            return result;
+        }
+
+        return eligibleLeads;
     }
 
     public async Task<BatchRetryResultDto> RetryFailedLeadsAsync(long sourceBatchId, CancellationToken cancellationToken)
@@ -157,8 +459,11 @@ public class BatchProcessingService(
     }
 
     private async Task<bool> ProcessLeadForBatchAsync(Lead lead, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
+        => await ProcessLeadForBatchAsync(batchRepository, lead, batchType, marker, cancellationToken);
+
+    private async Task<bool> ProcessLeadForBatchAsync(IBatchRepository repository, Lead lead, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
     {
-        var template = await batchRepository.GetTemplateByBatchTypeAsync(batchType, lead, cancellationToken);
+        var template = await repository.GetTemplateByBatchTypeAsync(batchType, lead, cancellationToken);
         if (template is null)
         {
             return false;
@@ -196,7 +501,7 @@ public class BatchProcessingService(
             lead.NextEmailSendDateUtc = sentAtUtc.AddDays(7);
         }
 
-        await batchRepository.AddEventAsync(new LeadEvent
+        await repository.AddEventAsync(new LeadEvent
         {
             Id = Guid.NewGuid(),
             LeadId = lead.Id,
@@ -206,7 +511,7 @@ public class BatchProcessingService(
             MetadataJson = $$"""{"eventName":"{{eventName}}","batchType":"{{batchType}}","systemMarker":"{{marker}}"}"""
         }, cancellationToken);
 
-        await batchRepository.SaveChangesAsync(cancellationToken);
+        await repository.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -247,21 +552,36 @@ public class BatchProcessingService(
         IReadOnlyList<int> stageCounts,
         CancellationToken cancellationToken)
     {
-        var adminEmail = configuration["BatchProcessing:AdminEmail"];
-        if (string.IsNullOrWhiteSpace(adminEmail))
+        var adminEmailConfig = configuration["BatchProcessing:AdminEmail"];
+        if (string.IsNullOrWhiteSpace(adminEmailConfig))
         {
             logger.LogWarning("BatchProcessing:AdminEmail is not configured.");
             return;
         }
 
-        await batchRepository.UpsertAdminReportAsync(
-            adminEmail,
-            stageCounts[0],
-            stageCounts[1],
-            stageCounts[2],
-            stageCounts[3],
-            stageCounts[4],
-            cancellationToken);
+        var adminRecipients = adminEmailConfig
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (adminRecipients.Count == 0)
+        {
+            logger.LogWarning("BatchProcessing:AdminEmail is configured but no valid recipients were found.");
+            return;
+        }
+
+        foreach (var recipient in adminRecipients)
+        {
+            await batchRepository.UpsertAdminReportAsync(
+                recipient,
+                stageCounts[0],
+                stageCounts[1],
+                stageCounts[2],
+                stageCounts[3],
+                stageCounts[4],
+                cancellationToken);
+        }
 
         var subject = $"[Batch Summary] {batchType} - {runDateUtc:yyyy-MM-dd}";
         var body = $"""
@@ -283,7 +603,17 @@ public class BatchProcessingService(
             </body></html>
             """;
 
-        await SendAdminEmailWithoutBccAsync(adminEmail, subject, body, cancellationToken);
+        foreach (var recipient in adminRecipients)
+        {
+            try
+            {
+                await SendAdminEmailWithoutBccAsync(recipient, subject, body, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send admin batch summary email to {Recipient}.", recipient);
+            }
+        }
     }
 
     private async Task SendAdminEmailWithoutBccAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken)

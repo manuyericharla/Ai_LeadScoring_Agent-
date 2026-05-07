@@ -1,3 +1,5 @@
+using LeadScoring.Api.Models;
+using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,6 +9,55 @@ namespace LeadScoring.Api.Controllers;
 [Route("batch")]
 public class BatchController(IBatchProcessingService batchProcessingService, ILogger<BatchController> logger) : ControllerBase
 {
+    [HttpGet("preview")]
+    public async Task<IActionResult> Preview([FromQuery] CampaignBatchType batchType, CancellationToken cancellationToken)
+    {
+        var result = await batchProcessingService.PreviewAsync(batchType, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpPost("run-manual")]
+    public async Task<IActionResult> RunManual([FromQuery] CampaignBatchType batchType, [FromBody] BatchManualRunRequestDto? request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await batchProcessingService.RunManualAsync(batchType, request?.Scope, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Manual batch run failed for {BatchType}", batchType);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Manual batch run failed due to internal error." });
+        }
+    }
+
+    [HttpPost("run-manual/start")]
+    public async Task<IActionResult> StartManual([FromQuery] CampaignBatchType batchType, [FromBody] BatchManualRunRequestDto? request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await batchProcessingService.StartManualAsync(batchType, request?.Scope, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Manual batch start failed for {BatchType}", batchType);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Manual batch start failed due to internal error." });
+        }
+    }
+
+    [HttpGet("run-manual/status/{jobId:guid}")]
+    public IActionResult ManualStatus(Guid jobId)
+    {
+        var status = batchProcessingService.GetManualStatus(jobId);
+        if (status is null)
+        {
+            return NotFound(new { message = "Manual batch job not found." });
+        }
+
+        return Ok(status);
+    }
+
     [HttpPost("retry/{batchId:long}")]
     public async Task<IActionResult> Retry(long batchId, CancellationToken cancellationToken)
     {

@@ -13,6 +13,7 @@ import { AppComboboxComponent } from '../shared/components/combobox/app-combobox
 import { AppInputComponent } from '../shared/components/input/app-input.component';
 import { AppTableComponent } from '../shared/components/table/app-table.component';
 import { EventsBarChartComponent } from '../shared/components/dashboard-charts/events-bar-chart.component';
+import { SourceBarChartComponent } from '../shared/components/dashboard-charts/source-bar-chart.component';
 import { StagePieChartComponent } from '../shared/components/dashboard-charts/stage-pie-chart.component';
 import { WorkspaceTopBarComponent } from './workspace-top-bar/workspace-top-bar.component';
 
@@ -32,6 +33,7 @@ import { WorkspaceTopBarComponent } from './workspace-top-bar/workspace-top-bar.
     AppInputComponent,
     AppTableComponent,
     EventsBarChartComponent,
+    SourceBarChartComponent,
     StagePieChartComponent,
     WorkspaceTopBarComponent
   ],
@@ -61,6 +63,10 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
   leadsSourceFilter = '';
   /** Empty string = all campaigns; use `leadsCampaignNoneSentinel` for rows with no campaign. */
   leadsCampaignFilter = '';
+  /** Empty string = all stages. */
+  leadsStageFilter: StageName | '' = '';
+  /** Lead signup filter for list view. */
+  leadsSignupFilter: 'all' | 'signed-up' | 'not-signed-up' = 'all';
   readonly leadsCampaignNoneSentinel = '__no_campaign__';
   readonly knownEventSourceLabels = ['Unknown', 'Email', 'Website', 'LinkedIn', 'Direct', 'Organic'] as const;
   activeTab: LeftTab = 'dashboard';
@@ -96,6 +102,16 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     productName: '',
     items: [{ eventName: '', score: '' }]
   };
+  manualBatchType: ManualBatchType = 'Day1';
+  manualScope: ManualScope = 'TotalEligible';
+  manualPreview?: BatchPreviewResult;
+  manualRunResult?: BatchManualRunResult;
+  manualRunHistory: ManualRunHistoryItem[] = [];
+  manualRunJobId?: string;
+  manualRunStatus?: BatchManualRunStatus;
+  private manualRunPollTimer?: ReturnType<typeof setInterval>;
+  manualLoading = false;
+  manualError = '';
 
   /** Unique company names from saved configs (datalist suggestions). */
   get distinctCompanyNames(): string[] {
@@ -164,6 +180,36 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     void this.router.navigate(['/leads', leadId]);
   }
 
+  openLeadsFromKpi(kpi: 'total' | 'cold' | 'warm' | 'mql' | 'hot' | 'signed-up'): void {
+    this.leadsSourceFilter = '';
+    this.leadsCampaignFilter = '';
+    this.currentPage = 1;
+    this.leadsStageFilter = '';
+    this.leadsSignupFilter = 'all';
+
+    switch (kpi) {
+      case 'cold':
+        this.leadsStageFilter = 'Cold';
+        break;
+      case 'warm':
+        this.leadsStageFilter = 'Warm';
+        break;
+      case 'mql':
+        this.leadsStageFilter = 'Mql';
+        break;
+      case 'hot':
+        this.leadsStageFilter = 'Hot';
+        break;
+      case 'signed-up':
+        this.leadsSignupFilter = 'signed-up';
+        break;
+      default:
+        break;
+    }
+
+    void this.router.navigate(['/leads']);
+  }
+
   private syncTabFromRoute(): void {
     let r: ActivatedRoute | null = this.route;
     while (r?.firstChild) {
@@ -187,9 +233,13 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     if (tab === 'company-config') {
       this.refreshCompanyProductIndex();
     }
+    if (tab === 'manual-batch' && !this.manualLoading) {
+      this.previewManualBatch();
+    }
   }
 
   ngOnDestroy(): void {
+    this.stopManualRunPolling();
     if (this.companyConfigFilterSearchTimer !== undefined) {
       clearTimeout(this.companyConfigFilterSearchTimer);
       this.companyConfigFilterSearchTimer = undefined;
@@ -456,6 +506,16 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
         }
         return c === cf;
       });
+    }
+
+    if (this.leadsStageFilter) {
+      list = list.filter((l) => l.stage === this.leadsStageFilter);
+    }
+
+    if (this.leadsSignupFilter === 'signed-up') {
+      list = list.filter((l) => l.signupCompleted);
+    } else if (this.leadsSignupFilter === 'not-signed-up') {
+      list = list.filter((l) => !l.signupCompleted);
     }
 
     return list;
@@ -858,6 +918,89 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     const [a, b] = parts;
     return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
   }
+
+  previewManualBatch(): void {
+    this.manualError = '';
+    this.manualLoading = true;
+    this.http
+      .get<BatchPreviewResult>(`${this.apiBase}/batch/preview?batchType=${encodeURIComponent(this.manualBatchType)}`)
+      .pipe(finalize(() => (this.manualLoading = false)))
+      .subscribe({
+        next: (res) => {
+          this.manualPreview = res;
+        },
+        error: () => {
+          this.manualError = 'Failed to preview batch. Check API and network.';
+        }
+      });
+  }
+
+  runManualBatch(): void {
+    this.manualError = '';
+    this.manualLoading = true;
+    this.manualRunResult = undefined;
+    this.http
+      .post<BatchManualRunStart>(`${this.apiBase}/batch/run-manual/start?batchType=${encodeURIComponent(this.manualBatchType)}`, { scope: this.manualScope })
+      .pipe(finalize(() => (this.manualLoading = false)))
+      .subscribe({
+        next: (res) => {
+          this.manualRunJobId = res.jobId;
+          this.manualRunStatus = {
+            jobId: res.jobId,
+            batchType: res.batchType,
+            scope: res.scope,
+            isRunning: true,
+            totalLeads: 0,
+            processedCount: 0,
+            successCount: 0,
+            failureCount: 0
+          };
+          this.startManualRunPolling(res.jobId);
+        },
+        error: () => {
+          this.manualError = 'Failed to run batch manually. Check API and network.';
+        }
+      });
+  }
+
+  private startManualRunPolling(jobId: string): void {
+    this.stopManualRunPolling();
+
+    const poll = (): void => {
+      this.http
+        .get<BatchManualRunStatus>(`${this.apiBase}/batch/run-manual/status/${encodeURIComponent(jobId)}`)
+        .subscribe({
+          next: (status) => {
+            this.manualRunStatus = status;
+            if (!status.isRunning) {
+              this.stopManualRunPolling();
+              if (status.result) {
+                this.manualRunResult = status.result;
+                this.manualRunHistory.unshift({
+                  runAtUtc: new Date().toISOString(),
+                  scope: status.scope,
+                  result: status.result
+                });
+              }
+            }
+          },
+          error: () => {
+            this.stopManualRunPolling();
+            this.manualError = 'Lost connection while tracking manual batch progress.';
+          }
+        });
+    };
+
+    poll();
+    this.manualRunPollTimer = setInterval(poll, 1200);
+  }
+
+  private stopManualRunPolling(): void {
+    if (this.manualRunPollTimer !== undefined) {
+      clearInterval(this.manualRunPollTimer);
+      this.manualRunPollTimer = undefined;
+    }
+  }
 }
 
 type StageName = 'Cold' | 'Warm' | 'Mql' | 'Hot';
@@ -885,8 +1028,10 @@ interface DashboardLead {
 
 interface DashboardResponse {
   totalLeads: number;
+  signedUpCount: number;
   stageCounts: Record<StageName, number>;
   eventsByType: Record<EventName, number>;
+  firstSourceCounts: Record<string, number>;
   leads: DashboardLead[];
 }
 
@@ -924,4 +1069,70 @@ interface CompanyProductConfig {
   createdAtUtc: string;
 }
 
-type LeftTab = 'dashboard' | 'leads' | 'company-config' | 'tracking-links';
+type LeftTab = 'dashboard' | 'leads' | 'company-config' | 'tracking-links' | 'manual-batch';
+type ManualBatchType = 'Day1' | 'Day2' | 'Day3' | 'Day4';
+type ManualScope =
+  | 'TotalEligible'
+  | 'TotalLeads'
+  | 'Stage0'
+  | 'Stage1'
+  | 'Stage2'
+  | 'Stage3'
+  | 'Stage4'
+  | 'NewLeads'
+  | 'Last2DaysInactive'
+  | 'Last4DaysSinceEmail'
+  | 'DidNotOpenEmail';
+
+interface BatchPreviewResult {
+  batchType: ManualBatchType;
+  totalLeadsCount: number;
+  stage0Count: number;
+  stage1Count: number;
+  stage2Count: number;
+  stage3Count: number;
+  stage4Count: number;
+  newLeadsCount: number;
+  last2DaysInactiveCount: number;
+  last4DaysSinceLastEmailCount: number;
+  didNotOpenEmailCount: number;
+  totalEligibleCount: number;
+}
+
+interface BatchFailureInfo {
+  leadId: string;
+  email: string;
+  reason: string;
+}
+
+interface BatchManualRunResult {
+  batchType: ManualBatchType;
+  totalLeads: number;
+  successCount: number;
+  failureCount: number;
+  failures: BatchFailureInfo[];
+}
+
+interface BatchManualRunStart {
+  jobId: string;
+  batchType: ManualBatchType;
+  scope: ManualScope;
+}
+
+interface BatchManualRunStatus {
+  jobId: string;
+  batchType: ManualBatchType;
+  scope: ManualScope;
+  isRunning: boolean;
+  totalLeads: number;
+  processedCount: number;
+  successCount: number;
+  failureCount: number;
+  result?: BatchManualRunResult;
+}
+
+interface ManualRunHistoryItem {
+  runAtUtc: string;
+  scope: ManualScope;
+  result: BatchManualRunResult;
+}

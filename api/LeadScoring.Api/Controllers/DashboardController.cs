@@ -95,11 +95,27 @@ public class DashboardController(LeadScoringDbContext db) : ControllerBase
             .GroupBy(l => l.Stage)
             .ToDictionary(g => g.Key, g => g.Count());
 
+        var signedUpCount = leads.Count(x => x.SignupCompleted);
+        var firstSourceCounts = await db.Leads
+            .AsNoTracking()
+            .GroupBy(l => l.FirstSource)
+            .Select(g => new { Source = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var firstSourceBuckets = firstSourceCounts
+            .GroupBy(x => (x.Source ?? EventSource.Unknown).ToString(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Sum(x => x.Count),
+                StringComparer.OrdinalIgnoreCase);
+
         return Ok(new
         {
             totalLeads = leads.Count,
+            signedUpCount,
             stageCounts,
             eventsByType,
+            firstSourceCounts = firstSourceBuckets,
             leads
         });
     }

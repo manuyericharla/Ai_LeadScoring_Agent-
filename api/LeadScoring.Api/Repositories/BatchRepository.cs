@@ -76,6 +76,13 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<List<Lead>> GetAllLeadsForPreviewAsync(CancellationToken cancellationToken)
+    {
+        return db.Leads
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<bool> HasBatchMarkerEventAsync(Guid leadId, string marker, DateTime fromUtc, CancellationToken cancellationToken)
     {
         return db.Events.AnyAsync(x =>
@@ -89,7 +96,7 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
         return db.Events.AnyAsync(x =>
             x.LeadId == leadId &&
             x.TimestampUtc > lastEmailSentUtc &&
-            x.MetadataJson == null || !x.MetadataJson.Contains("\"systemMarker\":"), cancellationToken);
+            (x.MetadataJson == null || !x.MetadataJson.Contains("\"systemMarker\":")), cancellationToken);
     }
 
     public Task<EmailTemplate?> GetTemplateByBatchTypeAsync(CampaignBatchType batchType, Lead lead, CancellationToken cancellationToken)

@@ -1,0 +1,31 @@
+<div class="lead-progress-circle" [attr.title]="tooltipText">
+  <svg
+    class="lead-progress-circle__svg"
+    [attr.viewBox]="'0 0 ' + size + ' ' + size"
+    role="img"
+    aria-label="Lead conversion progress"
+  >
+    <circle
+      class="lead-progress-circle__track"
+      [attr.cx]="size / 2"
+      [attr.cy]="size / 2"
+      [attr.r]="radius"
+      [attr.stroke-width]="strokeWidth"
+    />
+    <circle
+      class="lead-progress-circle__progress"
+      [attr.cx]="size / 2"
+      [attr.cy]="size / 2"
+      [attr.r]="radius"
+      [attr.stroke-width]="strokeWidth"
+      [attr.stroke-dasharray]="circumference"
+      [style.stroke-dashoffset]="dashOffset"
+      [style.stroke]="progressColor"
+    />
+  </svg>
+
+  <div class="lead-progress-circle__center">
+    <div class="lead-progress-circle__value">{{ displayValue }}</div>
+    <div class="lead-progress-circle__label">Leads Converted</div>
+  </div>
+</div>
