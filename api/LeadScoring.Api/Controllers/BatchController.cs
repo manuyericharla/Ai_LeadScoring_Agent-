@@ -9,6 +9,14 @@ namespace LeadScoring.Api.Controllers;
 [Route("batch")]
 public class BatchController(IBatchProcessingService batchProcessingService, ILogger<BatchController> logger) : ControllerBase
 {
+    [HttpGet("history")]
+    public async Task<IActionResult> History([FromQuery] int take = 200, CancellationToken cancellationToken = default)
+    {
+        take = Math.Clamp(take, 1, 500);
+        var rows = await batchProcessingService.GetBatchLogHistoryAsync(take, cancellationToken);
+        return Ok(rows);
+    }
+
     [HttpGet("preview")]
     public async Task<IActionResult> Preview([FromQuery] CampaignBatchType batchType, CancellationToken cancellationToken)
     {
@@ -21,7 +29,7 @@ public class BatchController(IBatchProcessingService batchProcessingService, ILo
     {
         try
         {
-            var result = await batchProcessingService.RunManualAsync(batchType, request?.Scope, cancellationToken);
+            var result = await batchProcessingService.RunManualAsync(batchType, request?.Scope, request?.MaxLeads, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)
@@ -36,7 +44,7 @@ public class BatchController(IBatchProcessingService batchProcessingService, ILo
     {
         try
         {
-            var result = await batchProcessingService.StartManualAsync(batchType, request?.Scope, cancellationToken);
+            var result = await batchProcessingService.StartManualAsync(batchType, request?.Scope, request?.MaxLeads, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)

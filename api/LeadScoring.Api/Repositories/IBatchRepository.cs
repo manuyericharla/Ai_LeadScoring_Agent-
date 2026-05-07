@@ -1,3 +1,4 @@
+using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Models;
 
 namespace LeadScoring.Api.Repositories;
@@ -11,10 +12,13 @@ public interface IBatchRepository
     Task<List<Lead>> GetDay3LeadsAsync(DateTime runDateUtc, CancellationToken cancellationToken);
     Task<List<Lead>> GetDay4LeadsAsync(DateTime runDateUtc, CancellationToken cancellationToken);
     Task<List<Lead>> GetAllLeadsForPreviewAsync(CancellationToken cancellationToken);
+    Task<BatchPreviewLeadAggregates> GetLeadAggregatesForPreviewAsync(DateTime nowUtc, CancellationToken cancellationToken);
+    Task<List<Lead>> GetLeadsDidNotOpenSinceLastEmailAsync(CancellationToken cancellationToken);
     Task<bool> HasBatchMarkerEventAsync(Guid leadId, string marker, DateTime fromUtc, CancellationToken cancellationToken);
     Task<bool> HasEngagementSinceLastEmailAsync(Guid leadId, DateTime lastEmailSentUtc, CancellationToken cancellationToken);
     Task<EmailTemplate?> GetTemplateByBatchTypeAsync(CampaignBatchType batchType, Lead lead, CancellationToken cancellationToken);
     Task<BatchLog> CreateBatchLogAsync(BatchLog batchLog, CancellationToken cancellationToken);
+    Task<List<BatchLog>> GetRecentBatchLogsAsync(int take, CancellationToken cancellationToken);
     Task<AdminBatchReport> UpsertAdminReportAsync(
         string email,
         int stage0Count,

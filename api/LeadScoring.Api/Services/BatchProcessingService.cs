@@ -84,58 +84,32 @@ public class BatchProcessingService(
     public async Task<BatchPreviewResultDto> PreviewAsync(CampaignBatchType batchType, CancellationToken cancellationToken)
     {
         var nowUtc = DateTime.UtcNow;
-        var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
-        var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
-
-        var stage0Count = allLeads.Count(x => x.Stage == LeadStage.Cold);
-        var stage1Count = allLeads.Count(x => x.Stage == LeadStage.Warm);
-        var stage2Count = allLeads.Count(x => x.Stage == LeadStage.Mql);
-        var stage3Count = allLeads.Count(x => x.Stage == LeadStage.Hot);
-        var stage4Count = allLeads.Count - stage0Count - stage1Count - stage2Count - stage3Count;
-
-        var newLeadsCount = allLeads.Count(x => x.CreatedAtUtc >= nowUtc.AddDays(-1));
-        var last2DaysInactiveCount = allLeads.Count(x => x.LastActivityUtc <= nowUtc.AddDays(-2));
-        var last4DaysSinceLastEmailCount = allLeads.Count(x => x.LastEmailSentDateUtc.HasValue && x.LastEmailSentDateUtc <= nowUtc.AddDays(-4));
-
-        var didNotOpenCount = 0;
-        foreach (var lead in allLeads.Where(x => x.LastEmailSentDateUtc.HasValue))
-        {
-            if (lead.LastEmailSentDateUtc is null)
-            {
-                continue;
-            }
-
-            var hasEngagement = await batchRepository.HasEngagementSinceLastEmailAsync(
-                lead.Id,
-                lead.LastEmailSentDateUtc.Value,
-                cancellationToken);
-            if (!hasEngagement)
-            {
-                didNotOpenCount++;
-            }
-        }
+        // Sequential: eligible query and aggregates share one scoped DbContext.
+        var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken).ConfigureAwait(false);
+        var agg = await batchRepository.GetLeadAggregatesForPreviewAsync(nowUtc, cancellationToken).ConfigureAwait(false);
 
         return new BatchPreviewResultDto(
             batchType,
-            allLeads.Count,
-            stage0Count,
-            stage1Count,
-            stage2Count,
-            stage3Count,
-            stage4Count,
-            newLeadsCount,
-            last2DaysInactiveCount,
-            last4DaysSinceLastEmailCount,
-            didNotOpenCount,
+            agg.TotalLeads,
+            agg.Stage0Count,
+            agg.Stage1Count,
+            agg.Stage2Count,
+            agg.Stage3Count,
+            agg.Stage4Count,
+            agg.NewLeadsCount,
+            agg.Last2DaysInactiveCount,
+            agg.Last4DaysSinceLastEmailCount,
+            agg.DidNotOpenEmailCount,
             eligibleLeads.Count);
     }
 
-    public async Task<BatchManualRunResultDto> RunManualAsync(CampaignBatchType batchType, string? scope, CancellationToken cancellationToken)
+    public async Task<BatchManualRunResultDto> RunManualAsync(CampaignBatchType batchType, string? scope, int? maxLeads, CancellationToken cancellationToken)
     {
         var nowUtc = DateTime.UtcNow;
         var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
         var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
-        var leads = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, scope, nowUtc, cancellationToken);
+        var filtered = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, scope, nowUtc, cancellationToken);
+        var leads = ApplyManualMaxLeads(filtered, maxLeads);
         var marker = $"DailySequence_{batchType}_Manual_{nowUtc:yyyyMMddHHmmss}";
 
         var processed = 0;
@@ -190,13 +164,15 @@ public class BatchProcessingService(
             failures.ToList());
     }
 
-    public async Task<BatchManualRunStartDto> StartManualAsync(CampaignBatchType batchType, string? scope, CancellationToken cancellationToken)
+    public async Task<BatchManualRunStartDto> StartManualAsync(CampaignBatchType batchType, string? scope, int? maxLeads, CancellationToken cancellationToken)
     {
         var nowUtc = DateTime.UtcNow;
         var normalizedScope = string.IsNullOrWhiteSpace(scope) ? "TotalEligible" : scope.Trim();
+        var normalizedMaxLeads = NormalizeManualMaxLeads(maxLeads);
         var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
         var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
-        var leads = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, normalizedScope, nowUtc, cancellationToken);
+        var filtered = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, normalizedScope, nowUtc, cancellationToken);
+        var leads = ApplyManualMaxLeads(filtered, normalizedMaxLeads);
         var state = progressStore.CreateJob(batchType, normalizedScope, leads.Count);
 
         _ = Task.Run(async () =>
@@ -205,7 +181,7 @@ public class BatchProcessingService(
             {
                 using var scope = scopeFactory.CreateScope();
                 var scopedService = scope.ServiceProvider.GetRequiredService<IBatchProcessingService>();
-                var result = await scopedService.RunManualTrackedAsync(state.JobId, batchType, normalizedScope, CancellationToken.None);
+                var result = await scopedService.RunManualTrackedAsync(state.JobId, batchType, normalizedScope, normalizedMaxLeads, CancellationToken.None);
                 progressStore.Complete(state.JobId, result);
             }
             catch (Exception ex)
@@ -220,12 +196,31 @@ public class BatchProcessingService(
 
     public BatchManualRunStatusDto? GetManualStatus(Guid jobId) => progressStore.GetStatus(jobId);
 
-    public async Task<BatchManualRunResultDto> RunManualTrackedAsync(Guid jobId, CampaignBatchType batchType, string? scope, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<BatchLogHistoryDto>> GetBatchLogHistoryAsync(int take, CancellationToken cancellationToken)
+    {
+        var rows = await batchRepository.GetRecentBatchLogsAsync(take, cancellationToken).ConfigureAwait(false);
+        var list = new List<BatchLogHistoryDto>(rows.Count);
+        foreach (var x in rows)
+        {
+            list.Add(new BatchLogHistoryDto(
+                x.BatchId,
+                x.RunDate,
+                x.BatchType,
+                x.TotalLeadsProcessed,
+                x.SuccessCount,
+                x.FailureCount));
+        }
+
+        return list;
+    }
+
+    public async Task<BatchManualRunResultDto> RunManualTrackedAsync(Guid jobId, CampaignBatchType batchType, string? scope, int? maxLeads, CancellationToken cancellationToken)
     {
         var nowUtc = DateTime.UtcNow;
         var eligibleLeads = await GetLeadsForBatchTypeAsync(batchType, nowUtc, cancellationToken);
         var allLeads = await batchRepository.GetAllLeadsForPreviewAsync(cancellationToken);
-        var leads = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, scope, nowUtc, cancellationToken);
+        var filtered = await FilterManualLeadsByScopeAsync(eligibleLeads, allLeads, scope, nowUtc, cancellationToken);
+        var leads = ApplyManualMaxLeads(filtered, maxLeads);
         var marker = $"DailySequence_{batchType}_Manual_{nowUtc:yyyyMMddHHmmss}";
 
         var processed = 0;
@@ -356,28 +351,31 @@ public class BatchProcessingService(
 
         if (scope.Equals("DidNotOpenEmail", StringComparison.OrdinalIgnoreCase))
         {
-            var result = new List<Lead>();
-            foreach (var lead in allLeads.Where(x => x.LastEmailSentDateUtc.HasValue))
-            {
-                if (!lead.LastEmailSentDateUtc.HasValue)
-                {
-                    continue;
-                }
-
-                var hasEngagement = await batchRepository.HasEngagementSinceLastEmailAsync(
-                    lead.Id,
-                    lead.LastEmailSentDateUtc.Value,
-                    cancellationToken);
-                if (!hasEngagement)
-                {
-                    result.Add(lead);
-                }
-            }
-
-            return result;
+            return await batchRepository.GetLeadsDidNotOpenSinceLastEmailAsync(cancellationToken).ConfigureAwait(false);
         }
 
         return eligibleLeads;
+    }
+
+    private static int? NormalizeManualMaxLeads(int? maxLeads)
+    {
+        if (maxLeads is null || maxLeads.Value < 1)
+        {
+            return null;
+        }
+
+        return maxLeads.Value;
+    }
+
+    private static List<Lead> ApplyManualMaxLeads(List<Lead> leads, int? maxLeads)
+    {
+        if (maxLeads is null || maxLeads.Value < 1)
+        {
+            return leads;
+        }
+
+        var take = Math.Min(maxLeads.Value, leads.Count);
+        return leads.Take(take).ToList();
     }
 
     public async Task<BatchRetryResultDto> RetryFailedLeadsAsync(long sourceBatchId, CancellationToken cancellationToken)
@@ -492,6 +490,7 @@ public class BatchProcessingService(
         var sentAtUtc = DateTime.UtcNow;
         lead.LastEmailSentDateUtc = sentAtUtc;
         lead.LastActivityUtc = sentAtUtc;
+        AdvanceStageAfterSuccessfulBatchSend(lead);
         if (batchType == CampaignBatchType.Day1)
         {
             lead.WelcomeEmailSent = true;
@@ -660,6 +659,38 @@ public class BatchProcessingService(
             CampaignBatchType.Day4 => await batchRepository.GetDay4LeadsAsync(runDateUtc, cancellationToken),
             _ => []
         };
+    }
+
+    /// <summary>
+    /// Matches dashboard "next stage" (Cold→Warm→Mql→Hot). Keeps score in sync so a later scoring event does not immediately downgrade the stage.
+    /// </summary>
+    private static void AdvanceStageAfterSuccessfulBatchSend(Lead lead)
+    {
+        var before = lead.Stage;
+        switch (lead.Stage)
+        {
+            case LeadStage.Cold:
+                lead.Stage = LeadStage.Warm;
+                lead.Score = Math.Max(lead.Score, 31);
+                break;
+            case LeadStage.Warm:
+                lead.Stage = LeadStage.Mql;
+                lead.Score = Math.Max(lead.Score, 61);
+                break;
+            case LeadStage.Mql:
+                lead.Stage = LeadStage.Hot;
+                lead.Score = Math.Max(lead.Score, 100);
+                break;
+            case LeadStage.Hot:
+                break;
+            default:
+                return;
+        }
+
+        if (before != lead.Stage)
+        {
+            lead.LastScoredAtUtc = DateTime.UtcNow;
+        }
     }
 
     private static int MapStage(LeadStage stage) => stage switch

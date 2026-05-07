@@ -1,3 +1,4 @@
+using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -83,6 +84,56 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<BatchPreviewLeadAggregates> GetLeadAggregatesForPreviewAsync(DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var fromNew = nowUtc.AddDays(-1);
+        var inactiveThresholdUtc = nowUtc.AddDays(-2);
+        var emailThresholdUtc = nowUtc.AddDays(-4);
+        var baseLeads = db.Leads.AsNoTracking();
+
+        // Do not run these concurrently: one scoped DbContext cannot execute overlapping operations.
+        var total = await baseLeads.CountAsync(cancellationToken).ConfigureAwait(false);
+        var s0 = await baseLeads.CountAsync(l => l.Stage == LeadStage.Cold, cancellationToken).ConfigureAwait(false);
+        var s1 = await baseLeads.CountAsync(l => l.Stage == LeadStage.Warm, cancellationToken).ConfigureAwait(false);
+        var s2 = await baseLeads.CountAsync(l => l.Stage == LeadStage.Mql, cancellationToken).ConfigureAwait(false);
+        var s3 = await baseLeads.CountAsync(l => l.Stage == LeadStage.Hot, cancellationToken).ConfigureAwait(false);
+        var newLeads = await baseLeads.CountAsync(l => l.CreatedAtUtc >= fromNew, cancellationToken).ConfigureAwait(false);
+        var inactive = await baseLeads.CountAsync(l => l.LastActivityUtc <= inactiveThresholdUtc, cancellationToken).ConfigureAwait(false);
+        var emailGap = await baseLeads.CountAsync(
+            l => l.LastEmailSentDateUtc.HasValue && l.LastEmailSentDateUtc <= emailThresholdUtc,
+            cancellationToken).ConfigureAwait(false);
+        var didNotOpen = await LeadsWithNoUserEngagementSinceLastEmail().CountAsync(cancellationToken).ConfigureAwait(false);
+
+        return new BatchPreviewLeadAggregates(
+            total,
+            s0,
+            s1,
+            s2,
+            s3,
+            total - s0 - s1 - s2 - s3,
+            newLeads,
+            inactive,
+            emailGap,
+            didNotOpen);
+    }
+
+    public Task<List<Lead>> GetLeadsDidNotOpenSinceLastEmailAsync(CancellationToken cancellationToken)
+    {
+        return LeadsWithNoUserEngagementSinceLastEmail().ToListAsync(cancellationToken);
+    }
+
+    private IQueryable<Lead> LeadsWithNoUserEngagementSinceLastEmail()
+    {
+        const string systemMarkerFragment = "\"systemMarker\":";
+        return db.Leads
+            .AsNoTracking()
+            .Where(l => l.LastEmailSentDateUtc != null)
+            .Where(l => !db.Events.Any(e =>
+                e.LeadId == l.Id &&
+                e.TimestampUtc > l.LastEmailSentDateUtc!.Value &&
+                (e.MetadataJson == null || !e.MetadataJson.Contains(systemMarkerFragment))));
+    }
+
     public Task<bool> HasBatchMarkerEventAsync(Guid leadId, string marker, DateTime fromUtc, CancellationToken cancellationToken)
     {
         return db.Events.AnyAsync(x =>
@@ -132,6 +183,16 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
         await db.BatchLogs.AddAsync(batchLog, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return batchLog;
+    }
+
+    public Task<List<BatchLog>> GetRecentBatchLogsAsync(int take, CancellationToken cancellationToken)
+    {
+        take = Math.Clamp(take, 1, 500);
+        return db.BatchLogs
+            .AsNoTracking()
+            .OrderByDescending(x => x.BatchId)
+            .Take(take)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<AdminBatchReport> UpsertAdminReportAsync(

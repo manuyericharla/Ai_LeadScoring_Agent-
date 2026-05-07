@@ -718,46 +718,146 @@
 
 <div *ngIf="activeTab === 'manual-batch'">
   <app-workspace-top-bar
-    title="Manual Batch Run"
-    subtitle="Preview and trigger Day 1–4 email batches on demand."
+    title="Manual batch"
+    subtitle="Send Day 1–4 sequence emails outside the automated schedule."
   />
 
-  <app-card heading="Batch controls">
-    <div class="manual-batch-controls">
-      <div class="form-row">
-        <label for="mbType">Batch type</label>
-        <select id="mbType" class="ws-select" [(ngModel)]="manualBatchType" (ngModelChange)="previewManualBatch()" name="mbType">
-          <option [ngValue]="'Day1'">Day 1 – Welcome (Cold)</option>
-          <option [ngValue]="'Day2'">Day 2 – Follow-up</option>
-          <option [ngValue]="'Day3'">Day 3 – Stage-based (MQL / Hot)</option>
-          <option [ngValue]="'Day4'">Day 4 – Re-engagement</option>
-        </select>
+  <app-card
+    heading="Configure send"
+    subheading="Choose the sequence day and audience segment, confirm how many recipients to include, then send."
+  >
+    <div class="manual-batch-field manual-batch-field--type">
+      <label for="mbType">Email sequence day</label>
+      <select id="mbType" class="ws-select ws-select--batch-type" [(ngModel)]="manualBatchType" (ngModelChange)="onManualBatchTypeChange()" name="mbType">
+        <option [ngValue]="'Day1'">Day 1 – Welcome (Cold)</option>
+        <option [ngValue]="'Day2'">Day 2 – Follow-up</option>
+        <option [ngValue]="'Day3'">Day 3 – Stage-based (MQL / Hot)</option>
+        <option [ngValue]="'Day4'">Day 4 – Re-engagement</option>
+      </select>
+      <p class="caption-muted">Recipient counts reload when this changes.</p>
+    </div>
+
+    <div class="manual-batch-recipient-panel">
+      <div *ngIf="manualLoading && !manualPreview" class="manual-batch-preview-placeholder">
+        Loading recipient counts…
+      </div>
+      <div *ngIf="!manualPreview && !manualLoading && !manualError" class="manual-batch-preview-placeholder">
+        Recipient counts load automatically for the sequence day shown above (this may take a moment).
       </div>
 
-      <div class="manual-batch-actions">
-        <app-button variant="secondary" type="button" (click)="previewManualBatch()" [loading]="manualLoading">
-          Preview
-        </app-button>
-        <app-button variant="primary" type="button" (click)="runManualBatch()" [loading]="manualLoading">
-          Run batch now
-        </app-button>
+      <div *ngIf="manualPreview" class="manual-batch-summary" [class.manual-batch-summary--busy]="manualLoading">
+        <p *ngIf="manualLoading" class="caption-muted">Updating recipient totals…</p>
+
+        <div class="manual-batch-field-section">
+          <div class="manual-batch-section-label" id="manualBucketLegend">Audience segment</div>
+          <div class="manual-scope-grid" role="radiogroup" aria-labelledby="manualBucketLegend">
+            <div class="manual-scope-row">
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="TotalEligible" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Total eligible <span class="manual-scope-count">({{ manualPreview.totalEligibleCount | number }})</span></span>
+              </label>
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="TotalLeads" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Total leads <span class="manual-scope-count">({{ manualPreview.totalLeadsCount | number }})</span></span>
+              </label>
+            </div>
+            <div class="manual-scope-row">
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="Stage0" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Stage 0 <span class="manual-scope-count">({{ manualPreview.stage0Count | number }})</span></span>
+              </label>
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="Stage1" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Stage 1 <span class="manual-scope-count">({{ manualPreview.stage1Count | number }})</span></span>
+              </label>
+            </div>
+            <div class="manual-scope-row">
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="Stage2" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Stage 2 <span class="manual-scope-count">({{ manualPreview.stage2Count | number }})</span></span>
+              </label>
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="Stage3" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Stage 3 <span class="manual-scope-count">({{ manualPreview.stage3Count | number }})</span></span>
+              </label>
+            </div>
+            <div class="manual-scope-row">
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="Stage4" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Stage 4 <span class="manual-scope-count">({{ manualPreview.stage4Count | number }})</span></span>
+              </label>
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="NewLeads" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>New leads <span class="manual-scope-count">({{ manualPreview.newLeadsCount | number }})</span></span>
+              </label>
+            </div>
+            <div class="manual-scope-row">
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="Last2DaysInactive" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Last 2 days inactive <span class="manual-scope-count">({{ manualPreview.last2DaysInactiveCount | number }})</span></span>
+              </label>
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="Last4DaysSinceEmail" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Last 4 days since email <span class="manual-scope-count">({{ manualPreview.last4DaysSinceLastEmailCount | number }})</span></span>
+              </label>
+            </div>
+            <div class="manual-scope-row manual-scope-row--single">
+              <label class="manual-scope-option">
+                <input type="radio" name="manualScope" value="DidNotOpenEmail" [(ngModel)]="manualScope" [disabled]="manualLoading" />
+                <span>Did not open email <span class="manual-scope-count">({{ manualPreview.didNotOpenEmailCount | number }})</span></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="manual-batch-field-section manual-batch-field-section--take">
+          <label class="manual-batch-section-label" for="manualLeadTake">Recipients to send</label>
+          <div *ngIf="manualSelectedBucketCount > 0" class="manual-lead-take-row">
+            <input
+              id="manualLeadTake"
+              type="number"
+              class="manual-lead-take-input"
+              name="manualLeadTake"
+              [(ngModel)]="manualLeadTakeCount"
+              (ngModelChange)="onManualLeadTakeChange($event)"
+              min="1"
+              [max]="manualSelectedBucketCount"
+              [disabled]="manualLoading"
+            />
+            <span class="manual-lead-take-meta">
+              <strong>{{ manualScopeLabel(manualScope) }}</strong> includes <strong>{{ manualSelectedBucketCount | number }}</strong> recipients.
+              Enter how many to send (between 1 and {{ manualSelectedBucketCount | number }}).
+            </span>
+          </div>
+          <p *ngIf="manualSelectedBucketCount === 0" class="caption-muted">
+            No recipients in <strong>{{ manualScopeLabel(manualScope) }}</strong>. Pick another segment, or switch the sequence day and back to reload totals once data updates.
+          </p>
+        </div>
       </div>
     </div>
 
     <p class="flash flash-error" *ngIf="manualError">{{ manualError }}</p>
+
+    <div class="manual-batch-footer-actions">
+      <app-button variant="primary" type="button" (click)="runManualBatch()" [loading]="manualLoading" [disabled]="!canRunManualBatch">
+        Run batch
+      </app-button>
+    </div>
+
     <p class="caption-muted" *ngIf="manualRunStatus?.isRunning">
-      Sending emails... {{ manualRunStatus?.processedCount | number }} / {{ manualRunStatus?.totalLeads | number }}
-      (Success: {{ manualRunStatus?.successCount | number }}, Failed: {{ manualRunStatus?.failureCount | number }})
+      Sending&nbsp; {{ manualRunStatus?.processedCount | number }} /
+      {{ manualRunStatus?.totalLeads | number }} · Delivered&nbsp; {{ manualRunStatus?.successCount | number }} ·
+      Failed&nbsp; {{ manualRunStatus?.failureCount | number }}
     </p>
-    <div *ngIf="manualRunStatus" class="manual-batch-results">
-      <h3>Live progress</h3>
+    <div *ngIf="manualRunStatus" class="manual-batch-live-progress">
+      <h3 class="manual-batch-results-title">Send progress</h3>
       <app-table>
         <table>
           <thead>
             <tr>
               <th>Job Id</th>
-              <th>Batch type</th>
-              <th>Scope</th>
+              <th>Sequence day</th>
+              <th>Segment</th>
               <th>Status</th>
               <th>Total</th>
               <th>Processed</th>
@@ -768,8 +868,8 @@
           <tbody>
             <tr>
               <td class="cell-muted">{{ manualRunStatus.jobId }}</td>
-              <td>{{ manualRunStatus.batchType }}</td>
-              <td>{{ manualRunStatus.scope }}</td>
+              <td>{{ manualBatchTypeLabel(manualRunStatus.batchType) }}</td>
+              <td>{{ manualScopeLabel(manualRunStatus.scope) }}</td>
               <td>{{ manualRunStatus.isRunning ? 'Running' : 'Completed' }}</td>
               <td>{{ manualRunStatus.totalLeads | number }}</td>
               <td>{{ manualRunStatus.processedCount | number }}</td>
@@ -780,37 +880,19 @@
         </table>
       </app-table>
     </div>
+  </app-card>
 
-    <div *ngIf="manualPreview && !manualLoading" class="manual-batch-summary">
-      <h3>Preview</h3>
-      <p><strong>Batch type:</strong> {{ manualPreview.batchType }}</p>
-      <p class="caption-muted">Choose one lead bucket below, then click <strong>Run batch now</strong> to process only that selected group.</p>
-      <div class="manual-scope-list">
-        <label><input type="radio" name="manualScope" value="TotalEligible" [(ngModel)]="manualScope" /> Total eligible ({{ manualPreview.totalEligibleCount | number }})</label>
-        <label><input type="radio" name="manualScope" value="TotalLeads" [(ngModel)]="manualScope" /> Total leads ({{ manualPreview.totalLeadsCount | number }})</label>
-        <label><input type="radio" name="manualScope" value="Stage0" [(ngModel)]="manualScope" /> Stage 0 ({{ manualPreview.stage0Count | number }})</label>
-        <label><input type="radio" name="manualScope" value="Stage1" [(ngModel)]="manualScope" /> Stage 1 ({{ manualPreview.stage1Count | number }})</label>
-        <label><input type="radio" name="manualScope" value="Stage2" [(ngModel)]="manualScope" /> Stage 2 ({{ manualPreview.stage2Count | number }})</label>
-        <label><input type="radio" name="manualScope" value="Stage3" [(ngModel)]="manualScope" /> Stage 3 ({{ manualPreview.stage3Count | number }})</label>
-        <label><input type="radio" name="manualScope" value="Stage4" [(ngModel)]="manualScope" /> Stage 4 ({{ manualPreview.stage4Count | number }})</label>
-        <label><input type="radio" name="manualScope" value="NewLeads" [(ngModel)]="manualScope" /> New leads ({{ manualPreview.newLeadsCount | number }})</label>
-        <label><input type="radio" name="manualScope" value="Last2DaysInactive" [(ngModel)]="manualScope" /> Last 2 days inactive ({{ manualPreview.last2DaysInactiveCount | number }})</label>
-        <label><input type="radio" name="manualScope" value="Last4DaysSinceEmail" [(ngModel)]="manualScope" /> Last 4 days since email ({{ manualPreview.last4DaysSinceLastEmailCount | number }})</label>
-        <label><input type="radio" name="manualScope" value="DidNotOpenEmail" [(ngModel)]="manualScope" /> Did not open email ({{ manualPreview.didNotOpenEmailCount | number }})</label>
-      </div>
-    </div>
-
-    <div *ngIf="manualRunResult && !manualLoading" class="manual-batch-results">
-      <h3>Last run result</h3>
-      <ul>
-        <li><strong>Batch type:</strong> {{ manualRunResult.batchType }}</li>
-        <li><strong>Total processed:</strong> {{ manualRunResult.totalLeads | number }}</li>
-        <li><strong>Success:</strong> {{ manualRunResult.successCount | number }}</li>
-        <li><strong>Failed:</strong> {{ manualRunResult.failureCount | number }}</li>
+  <app-card *ngIf="manualRunResult && !manualLoading" heading="Latest send outcome">
+    <div class="manual-batch-results">
+      <ul class="manual-batch-result-list">
+        <li><span class="muted-lbl">Sequence day</span> {{ manualBatchTypeLabel(manualRunResult.batchType) }}</li>
+        <li><span class="muted-lbl">Total processed</span> {{ manualRunResult.totalLeads | number }}</li>
+        <li><span class="muted-lbl">Success</span> {{ manualRunResult.successCount | number }}</li>
+        <li><span class="muted-lbl">Failed</span> {{ manualRunResult.failureCount | number }}</li>
       </ul>
 
       <div *ngIf="manualRunResult.failures.length > 0">
-        <h4>Failures</h4>
+        <h4 class="manual-batch-failures-heading">Failed deliveries</h4>
         <app-table>
           <table>
             <thead>
@@ -831,16 +913,17 @@
         </app-table>
       </div>
     </div>
+  </app-card>
 
-    <div *ngIf="manualRunHistory.length > 0" class="manual-batch-results">
-      <h3>Run history</h3>
+  <app-card *ngIf="manualRunHistory.length > 0" heading="Recent sends (this session)">
+    <div class="manual-batch-results">
       <app-table>
         <table>
           <thead>
             <tr>
-              <th>Run time</th>
-              <th>Batch type</th>
-              <th>Scope</th>
+              <th>Sent at (UTC)</th>
+              <th>Sequence day</th>
+              <th>Segment</th>
               <th>Total processed</th>
               <th>Success</th>
               <th>Failed</th>
@@ -849,8 +932,8 @@
           <tbody>
             <tr *ngFor="let h of manualRunHistory">
               <td>{{ h.runAtUtc | date:'yyyy-MM-dd HH:mm:ss':'UTC' }} UTC</td>
-              <td>{{ h.result.batchType }}</td>
-              <td>{{ h.scope }}</td>
+              <td>{{ manualBatchTypeLabel(h.result.batchType) }}</td>
+              <td>{{ manualScopeLabel(h.scope) }}</td>
               <td>{{ h.result.totalLeads | number }}</td>
               <td>{{ h.result.successCount | number }}</td>
               <td>{{ h.result.failureCount | number }}</td>
@@ -859,5 +942,83 @@
         </table>
       </app-table>
     </div>
+  </app-card>
+
+  <app-card>
+    <header class="batch-log-card-header">
+      <div class="batch-log-card-header__text">
+        <h3 class="batch-log-card-header__title">Batch history</h3>
+        <p class="batch-log-card-header__sub">
+          Scheduled automation and manual sends, newest first. All times UTC.
+        </p>
+      </div>
+      <app-button variant="secondary" type="button" [loading]="batchLogHistoryLoading" (click)="loadBatchLogHistory()">
+        Refresh
+      </app-button>
+    </header>
+    <p class="flash flash-error" *ngIf="batchLogHistoryError">{{ batchLogHistoryError }}</p>
+    <p class="caption-muted" *ngIf="!batchLogHistoryLoading && batchLogHistoryRows.length === 0 && !batchLogHistoryError">
+      No logged sends yet. History appears after scheduled or manual sends complete.
+    </p>
+    <app-table *ngIf="batchLogHistoryRows.length > 0">
+      <table>
+        <thead>
+          <tr>
+            <th>Batch ID</th>
+            <th>Run time (UTC)</th>
+            <th>Sequence day</th>
+            <th>Total processed</th>
+            <th>Success</th>
+            <th>Failed</th>
+            <th>Success rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of batchLogHistoryPagedRows">
+            <td>{{ r.batchId | number }}</td>
+            <td>{{ r.runDateUtc | date: 'yyyy-MM-dd HH:mm:ss':'UTC' }}</td>
+            <td>{{ manualBatchTypeLabel(r.batchType) }}</td>
+            <td>{{ r.totalLeadsProcessed | number }}</td>
+            <td>{{ r.successCount | number }}</td>
+            <td>{{ r.failureCount | number }}</td>
+            <td>{{ batchLogSuccessRateDisplay(r) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </app-table>
+
+    <nav
+      class="batch-log-pagination"
+      *ngIf="batchLogHistoryRows.length > 0"
+      aria-label="Batch history pagination"
+    >
+      <span class="batch-log-pagination__summary caption-muted">
+        Showing {{ batchLogHistoryRangeStart | number }}–{{ batchLogHistoryRangeEnd | number }} of
+        {{ batchLogHistoryRows.length | number }}
+      </span>
+      <div class="batch-log-pagination__controls">
+        <app-button
+          variant="secondary"
+          type="button"
+          size="sm"
+          (click)="batchLogHistoryPrevPage()"
+          [disabled]="batchLogHistoryPage <= 1 || batchLogHistoryLoading"
+        >
+          Previous
+        </app-button>
+        <span class="caption-muted batch-log-pagination__page">
+          Page {{ batchLogHistoryPage | number }} of {{ batchLogHistoryTotalPages | number }}
+        </span>
+        <app-button
+          variant="secondary"
+          type="button"
+          size="sm"
+          (click)="batchLogHistoryNextPage()"
+          [disabled]="batchLogHistoryPage >= batchLogHistoryTotalPages || batchLogHistoryLoading"
+        >
+          Next
+        </app-button>
+      </div>
+    </nav>
   </app-card>
 </div>

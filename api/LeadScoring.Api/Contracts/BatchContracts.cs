@@ -10,6 +10,18 @@ public record BatchRetryResultDto(
     int FailedCount,
     BatchStatus Status);
 
+public record BatchPreviewLeadAggregates(
+    int TotalLeads,
+    int Stage0Count,
+    int Stage1Count,
+    int Stage2Count,
+    int Stage3Count,
+    int Stage4Count,
+    int NewLeadsCount,
+    int Last2DaysInactiveCount,
+    int Last4DaysSinceLastEmailCount,
+    int DidNotOpenEmailCount);
+
 public record BatchPreviewResultDto(
     CampaignBatchType BatchType,
     int TotalLeadsCount,
@@ -25,7 +37,8 @@ public record BatchPreviewResultDto(
     int TotalEligibleCount);
 
 public record BatchManualRunRequestDto(
-    string? Scope);
+    string? Scope,
+    int? MaxLeads = null);
 
 public record BatchFailureInfoDto(
     Guid LeadId,
@@ -54,3 +67,11 @@ public record BatchManualRunStatusDto(
     int SuccessCount,
     int FailureCount,
     BatchManualRunResultDto? Result);
+
+public record BatchLogHistoryDto(
+    long BatchId,
+    DateTime RunDateUtc,
+    CampaignBatchType BatchType,
+    int TotalLeadsProcessed,
+    int SuccessCount,
+    int FailureCount);

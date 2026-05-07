@@ -103,15 +103,80 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     items: [{ eventName: '', score: '' }]
   };
   manualBatchType: ManualBatchType = 'Day1';
-  manualScope: ManualScope = 'TotalEligible';
+  private _manualScope: ManualScope = 'TotalEligible';
+  manualLeadTakeCount = 1;
+  private pendingResetTakeToFullBucket = false;
   manualPreview?: BatchPreviewResult;
   manualRunResult?: BatchManualRunResult;
   manualRunHistory: ManualRunHistoryItem[] = [];
+  /** Persisted rows from `BatchLogs` (daily + manual runs). */
+  batchLogHistoryRows: BatchLogHistoryRow[] = [];
+  readonly batchLogHistoryPageSize = 10;
+  batchLogHistoryPage = 1;
+  batchLogHistoryLoading = false;
+  batchLogHistoryError = '';
   manualRunJobId?: string;
   manualRunStatus?: BatchManualRunStatus;
   private manualRunPollTimer?: ReturnType<typeof setInterval>;
   manualLoading = false;
   manualError = '';
+
+  /** Selected lead bucket for Manual Batch. Changing scope resets leads-to-process to the full bucket size. */
+  get manualScope(): ManualScope {
+    return this._manualScope;
+  }
+
+  set manualScope(value: ManualScope) {
+    if (this._manualScope === value) {
+      return;
+    }
+    this._manualScope = value;
+    const n = this.manualSelectedBucketCount;
+    this.manualLeadTakeCount = n > 0 ? n : 1;
+  }
+
+  /** Count of leads in the currently selected bucket (from last preview). */
+  get manualSelectedBucketCount(): number {
+    const p = this.manualPreview;
+    if (!p) {
+      return 0;
+    }
+    switch (this.manualScope) {
+      case 'TotalEligible':
+        return p.totalEligibleCount;
+      case 'TotalLeads':
+        return p.totalLeadsCount;
+      case 'Stage0':
+        return p.stage0Count;
+      case 'Stage1':
+        return p.stage1Count;
+      case 'Stage2':
+        return p.stage2Count;
+      case 'Stage3':
+        return p.stage3Count;
+      case 'Stage4':
+        return p.stage4Count;
+      case 'NewLeads':
+        return p.newLeadsCount;
+      case 'Last2DaysInactive':
+        return p.last2DaysInactiveCount;
+      case 'Last4DaysSinceEmail':
+        return p.last4DaysSinceLastEmailCount;
+      case 'DidNotOpenEmail':
+        return p.didNotOpenEmailCount;
+      default:
+        return 0;
+    }
+  }
+
+  get canRunManualBatch(): boolean {
+    return (
+      !!this.manualPreview &&
+      !this.manualLoading &&
+      this.manualSelectedBucketCount > 0 &&
+      this.manualLeadTakeCount >= 1
+    );
+  }
 
   /** Unique company names from saved configs (datalist suggestions). */
   get distinctCompanyNames(): string[] {
@@ -235,6 +300,7 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     }
     if (tab === 'manual-batch' && !this.manualLoading) {
       this.previewManualBatch();
+      this.loadBatchLogHistory();
     }
   }
 
@@ -927,12 +993,97 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
       .pipe(finalize(() => (this.manualLoading = false)))
       .subscribe({
         next: (res) => {
+          const wasEmpty = !this.manualPreview;
           this.manualPreview = res;
+          if (this.pendingResetTakeToFullBucket || wasEmpty) {
+            this.pendingResetTakeToFullBucket = false;
+            this.resetManualLeadTakeToBucketSize();
+          } else {
+            this.clampManualLeadTakeAfterPreview();
+          }
         },
         error: () => {
-          this.manualError = 'Failed to preview batch. Check API and network.';
+          this.manualError = 'Could not load recipient counts. Verify the API or your network connection.';
         }
       });
+  }
+
+  onManualBatchTypeChange(): void {
+    this.pendingResetTakeToFullBucket = true;
+    this.previewManualBatch();
+  }
+
+  onManualLeadTakeChange(raw: number | string | null): void {
+    const n = this.manualSelectedBucketCount;
+    if (n <= 0) {
+      this.manualLeadTakeCount = 1;
+      return;
+    }
+    let v =
+      typeof raw === 'number' && !Number.isNaN(raw)
+        ? Math.floor(raw)
+        : Number.parseInt(String(raw ?? ''), 10);
+    if (Number.isNaN(v)) {
+      v = 1;
+    }
+    this.manualLeadTakeCount = Math.min(Math.max(1, v), n);
+  }
+
+  /** Maps API numeric enum or string batch type to the same labels as the batch-type dropdown. */
+  manualBatchTypeLabel(batchType: unknown): string {
+    let code: number | null = null;
+    if (typeof batchType === 'number' && Number.isFinite(batchType)) {
+      code = batchType;
+    } else if (batchType === 'Day1' || batchType === 'Day2' || batchType === 'Day3' || batchType === 'Day4') {
+      code = { Day1: 1, Day2: 2, Day3: 3, Day4: 4 }[batchType];
+    } else {
+      const parsed = Number.parseInt(String(batchType ?? ''), 10);
+      if (!Number.isNaN(parsed)) {
+        code = parsed;
+      }
+    }
+    const labels: Record<number, string> = {
+      1: 'Day 1 – Welcome (Cold)',
+      2: 'Day 2 – Follow-up',
+      3: 'Day 3 – Stage-based (MQL / Hot)',
+      4: 'Day 4 – Re-engagement'
+    };
+    if (code !== null && labels[code]) {
+      return labels[code];
+    }
+    return String(batchType ?? '');
+  }
+
+  manualScopeLabel(scope: unknown): string {
+    const key = String(scope ?? '');
+    const map: Record<string, string> = {
+      TotalEligible: 'Total eligible',
+      TotalLeads: 'Total leads',
+      Stage0: 'Stage 0',
+      Stage1: 'Stage 1',
+      Stage2: 'Stage 2',
+      Stage3: 'Stage 3',
+      Stage4: 'Stage 4',
+      NewLeads: 'New leads',
+      Last2DaysInactive: 'Last 2 days inactive',
+      Last4DaysSinceEmail: 'Last 4 days since email',
+      DidNotOpenEmail: 'Did not open email'
+    };
+    return map[key] ?? key;
+  }
+
+  private resetManualLeadTakeToBucketSize(): void {
+    const n = this.manualSelectedBucketCount;
+    this.manualLeadTakeCount = n > 0 ? n : 1;
+  }
+
+  private clampManualLeadTakeAfterPreview(): void {
+    const n = this.manualSelectedBucketCount;
+    if (n <= 0) {
+      this.manualLeadTakeCount = 1;
+      return;
+    }
+    this.manualLeadTakeCount = Math.min(Math.max(1, Math.floor(this.manualLeadTakeCount)), n);
   }
 
   runManualBatch(): void {
@@ -940,7 +1091,15 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     this.manualLoading = true;
     this.manualRunResult = undefined;
     this.http
-      .post<BatchManualRunStart>(`${this.apiBase}/batch/run-manual/start?batchType=${encodeURIComponent(this.manualBatchType)}`, { scope: this.manualScope })
+      .post<BatchManualRunStart>(`${this.apiBase}/batch/run-manual/start?batchType=${encodeURIComponent(this.manualBatchType)}`, (() => {
+        const n = this.manualSelectedBucketCount;
+        const take = Math.min(Math.max(1, Math.floor(this.manualLeadTakeCount)), n);
+        const payload: { scope: ManualScope; maxLeads?: number } = { scope: this.manualScope };
+        if (take < n) {
+          payload.maxLeads = take;
+        }
+        return payload;
+      })())
       .pipe(finalize(() => (this.manualLoading = false)))
       .subscribe({
         next: (res) => {
@@ -958,7 +1117,7 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
           this.startManualRunPolling(res.jobId);
         },
         error: () => {
-          this.manualError = 'Failed to run batch manually. Check API and network.';
+          this.manualError = 'Could not start this send. Verify the API or try again.';
         }
       });
   }
@@ -982,11 +1141,14 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
                   result: status.result
                 });
               }
+              // Bucket counts (e.g. Last 2 days inactive) and stage totals reflect DB changes only after preview refresh.
+              this.previewManualBatch();
+              this.loadBatchLogHistory();
             }
           },
           error: () => {
             this.stopManualRunPolling();
-            this.manualError = 'Lost connection while tracking manual batch progress.';
+            this.manualError = 'Connection lost while fetching send progress.';
           }
         });
     };
@@ -1000,6 +1162,87 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
       clearInterval(this.manualRunPollTimer);
       this.manualRunPollTimer = undefined;
     }
+  }
+
+  loadBatchLogHistory(): void {
+    this.batchLogHistoryLoading = true;
+    this.batchLogHistoryError = '';
+    this.http
+      .get<BatchLogHistoryRow[]>(`${this.apiBase}/batch/history?take=200`)
+      .pipe(finalize(() => (this.batchLogHistoryLoading = false)))
+      .subscribe({
+        next: (rows) => {
+          this.batchLogHistoryRows = rows ?? [];
+          this.batchLogHistoryPage = 1;
+          this.clampBatchLogHistoryPage();
+        },
+        error: () => {
+          this.batchLogHistoryError = 'Could not load batch history.';
+        }
+      });
+  }
+
+  get batchLogHistoryTotalPages(): number {
+    const n = this.batchLogHistoryRows.length;
+    if (n === 0) {
+      return 0;
+    }
+    return Math.ceil(n / this.batchLogHistoryPageSize);
+  }
+
+  get batchLogHistoryPagedRows(): BatchLogHistoryRow[] {
+    const start = (this.batchLogHistoryPage - 1) * this.batchLogHistoryPageSize;
+    return this.batchLogHistoryRows.slice(start, start + this.batchLogHistoryPageSize);
+  }
+
+  get batchLogHistoryRangeStart(): number {
+    if (this.batchLogHistoryRows.length === 0) {
+      return 0;
+    }
+    return (this.batchLogHistoryPage - 1) * this.batchLogHistoryPageSize + 1;
+  }
+
+  get batchLogHistoryRangeEnd(): number {
+    return Math.min(this.batchLogHistoryPage * this.batchLogHistoryPageSize, this.batchLogHistoryRows.length);
+  }
+
+  batchLogHistoryPrevPage(): void {
+    if (this.batchLogHistoryPage > 1) {
+      this.batchLogHistoryPage--;
+    }
+  }
+
+  batchLogHistoryNextPage(): void {
+    if (this.batchLogHistoryPage < this.batchLogHistoryTotalPages) {
+      this.batchLogHistoryPage++;
+    }
+  }
+
+  private clampBatchLogHistoryPage(): void {
+    const tp = this.batchLogHistoryTotalPages;
+    if (tp === 0) {
+      this.batchLogHistoryPage = 1;
+      return;
+    }
+    if (this.batchLogHistoryPage > tp) {
+      this.batchLogHistoryPage = tp;
+    }
+    if (this.batchLogHistoryPage < 1) {
+      this.batchLogHistoryPage = 1;
+    }
+  }
+
+  batchLogSuccessRatePct(row: BatchLogHistoryRow): number | null {
+    const t = row.totalLeadsProcessed;
+    if (t <= 0) {
+      return null;
+    }
+    return Math.round((row.successCount / t) * 1000) / 10;
+  }
+
+  batchLogSuccessRateDisplay(row: BatchLogHistoryRow): string {
+    const p = this.batchLogSuccessRatePct(row);
+    return p === null ? '—' : `${p}%`;
   }
 }
 
@@ -1085,7 +1328,8 @@ type ManualScope =
   | 'DidNotOpenEmail';
 
 interface BatchPreviewResult {
-  batchType: ManualBatchType;
+  /** API may serialize `CampaignBatchType` as a number (1–4). */
+  batchType: ManualBatchType | number;
   totalLeadsCount: number;
   stage0Count: number;
   stage1Count: number;
@@ -1106,7 +1350,7 @@ interface BatchFailureInfo {
 }
 
 interface BatchManualRunResult {
-  batchType: ManualBatchType;
+  batchType: ManualBatchType | number;
   totalLeads: number;
   successCount: number;
   failureCount: number;
@@ -1115,13 +1359,13 @@ interface BatchManualRunResult {
 
 interface BatchManualRunStart {
   jobId: string;
-  batchType: ManualBatchType;
+  batchType: ManualBatchType | number;
   scope: ManualScope;
 }
 
 interface BatchManualRunStatus {
   jobId: string;
-  batchType: ManualBatchType;
+  batchType: ManualBatchType | number;
   scope: ManualScope;
   isRunning: boolean;
   totalLeads: number;
@@ -1135,4 +1379,14 @@ interface ManualRunHistoryItem {
   runAtUtc: string;
   scope: ManualScope;
   result: BatchManualRunResult;
+}
+
+/** Matches API `BatchLogHistoryDto` (camelCase JSON). */
+interface BatchLogHistoryRow {
+  batchId: number;
+  runDateUtc: string;
+  batchType: number;
+  totalLeadsProcessed: number;
+  successCount: number;
+  failureCount: number;
 }
