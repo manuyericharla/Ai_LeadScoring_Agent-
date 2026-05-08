@@ -2,7 +2,6 @@ using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Models;
 using LeadScoring.Api.Repositories;
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 using System.Text;
@@ -18,6 +17,8 @@ public class BatchProcessingService(
     IServiceScopeFactory scopeFactory,
     ManualBatchProgressStore progressStore) : IBatchProcessingService
 {
+    private sealed record SentEmailSample(int TemplateId, string Subject, string HtmlBody, string ExampleRecipientEmail);
+
     public async Task ProcessActiveConfigsAsync(CancellationToken cancellationToken)
     {
         var runDateUtc = DateTime.UtcNow;
@@ -36,6 +37,8 @@ public class BatchProcessingService(
         var success = 0;
         var failed = 0;
         var stageCounts = new int[5];
+        var adminRecipients = await ResolveAdminRecipientsAsync(cancellationToken).ConfigureAwait(false);
+        var sentSamples = new ConcurrentDictionary<int, SentEmailSample>();
 
         foreach (var lead in leads)
         {
@@ -60,7 +63,7 @@ public class BatchProcessingService(
             processed++;
             stageCounts[MapStage(lead.Stage)]++;
 
-            var sendResult = await ProcessLeadForBatchAsync(lead, batchType, marker, cancellationToken);
+            var sendResult = await ProcessLeadForBatchAsync(lead, batchType, marker, sentSamples, cancellationToken);
             if (sendResult)
             {
                 success++;
@@ -80,7 +83,9 @@ public class BatchProcessingService(
             FailureCount = failed
         }, cancellationToken);
 
-        await SendAdminSummaryAsync(runDateUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
+        await UpdateAdminReportAggregatesAsync(adminRecipients, stageCounts, cancellationToken);
+        await SendBatchMirrorEmailToAdminsAsync(adminRecipients, batchType, runDateUtc, sentSamples.Values, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<BatchPreviewResultDto> PreviewAsync(CampaignBatchType batchType, CancellationToken cancellationToken)
@@ -120,6 +125,8 @@ public class BatchProcessingService(
         var failures = new ConcurrentBag<BatchFailureInfoDto>();
         var stageCounts = new int[5];
         var maxParallelism = Math.Clamp(configuration.GetValue<int?>("BatchProcessing:ManualMaxParallelism") ?? 5, 1, 20);
+        var adminRecipients = await ResolveAdminRecipientsAsync(cancellationToken).ConfigureAwait(false);
+        var sentSamples = new ConcurrentDictionary<int, SentEmailSample>();
 
         await Parallel.ForEachAsync(
             leads,
@@ -135,7 +142,7 @@ public class BatchProcessingService(
             Interlocked.Increment(ref processed);
             Interlocked.Increment(ref stageCounts[MapStage(lead.Stage)]);
 
-            var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct);
+            var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, sentSamples, ct);
             if (sent)
             {
                 Interlocked.Increment(ref success);
@@ -156,7 +163,9 @@ public class BatchProcessingService(
             FailureCount = failed
         }, cancellationToken);
 
-        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
+        await UpdateAdminReportAggregatesAsync(adminRecipients, stageCounts, cancellationToken);
+        await SendBatchMirrorEmailToAdminsAsync(adminRecipients, batchType, nowUtc, sentSamples.Values, cancellationToken)
+            .ConfigureAwait(false);
 
         return new BatchManualRunResultDto(
             batchType,
@@ -231,6 +240,8 @@ public class BatchProcessingService(
         var failures = new ConcurrentBag<BatchFailureInfoDto>();
         var stageCounts = new int[5];
         var maxParallelism = Math.Clamp(configuration.GetValue<int?>("BatchProcessing:ManualMaxParallelism") ?? 5, 1, 20);
+        var adminRecipients = await ResolveAdminRecipientsAsync(cancellationToken).ConfigureAwait(false);
+        var sentSamples = new ConcurrentDictionary<int, SentEmailSample>();
 
         await Parallel.ForEachAsync(
             leads,
@@ -246,7 +257,7 @@ public class BatchProcessingService(
                 Interlocked.Increment(ref processed);
                 Interlocked.Increment(ref stageCounts[MapStage(lead.Stage)]);
 
-                var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, ct);
+                var sent = await ProcessLeadInIsolatedScopeAsync(lead.Id, batchType, marker, sentSamples, ct);
                 if (sent)
                 {
                     Interlocked.Increment(ref success);
@@ -269,7 +280,9 @@ public class BatchProcessingService(
             FailureCount = failed
         }, cancellationToken);
 
-        await SendAdminSummaryAsync(nowUtc, batchType, processed, success, failed, stageCounts, cancellationToken);
+        await UpdateAdminReportAggregatesAsync(adminRecipients, stageCounts, cancellationToken);
+        await SendBatchMirrorEmailToAdminsAsync(adminRecipients, batchType, nowUtc, sentSamples.Values, cancellationToken)
+            .ConfigureAwait(false);
 
         return new BatchManualRunResultDto(
             batchType,
@@ -279,7 +292,12 @@ public class BatchProcessingService(
             failures.ToList());
     }
 
-    private async Task<bool> ProcessLeadInIsolatedScopeAsync(Guid leadId, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
+    private async Task<bool> ProcessLeadInIsolatedScopeAsync(
+        Guid leadId,
+        CampaignBatchType batchType,
+        string marker,
+        ConcurrentDictionary<int, SentEmailSample> sentSamples,
+        CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var scopedRepository = scope.ServiceProvider.GetRequiredService<IBatchRepository>();
@@ -290,7 +308,7 @@ public class BatchProcessingService(
             return false;
         }
 
-        return await ProcessLeadForBatchAsync(scopedRepository, lead, batchType, marker, cancellationToken);
+        return await ProcessLeadForBatchAsync(scopedRepository, lead, batchType, marker, sentSamples, cancellationToken);
     }
 
     private async Task<List<Lead>> FilterManualLeadsByScopeAsync(
@@ -415,6 +433,8 @@ public class BatchProcessingService(
 
         var successCount = 0;
         var failedCount = 0;
+        var adminRecipients = await ResolveAdminRecipientsAsync(cancellationToken).ConfigureAwait(false);
+        var sentSamples = new ConcurrentDictionary<int, SentEmailSample>();
         foreach (var batchLead in retryBatchLeads)
         {
             var lead = await batchRepository.GetLeadForUpdateAsync(batchLead.LeadId, cancellationToken);
@@ -426,7 +446,7 @@ public class BatchProcessingService(
             }
             else
             {
-                var result = await ProcessLeadForBatchAsync(lead, CampaignBatchType.Day3, "RetryBatchSent", cancellationToken);
+                var result = await ProcessLeadForBatchAsync(lead, CampaignBatchType.Day3, "RetryBatchSent", sentSamples, cancellationToken);
                 batchLead.Status = result ? BatchLeadStatus.Success : BatchLeadStatus.Failed;
                 batchLead.ErrorMessage = result ? null : "Retry failed.";
                 if (result)
@@ -458,10 +478,21 @@ public class BatchProcessingService(
             retryBatch.Status);
     }
 
-    private async Task<bool> ProcessLeadForBatchAsync(Lead lead, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
-        => await ProcessLeadForBatchAsync(batchRepository, lead, batchType, marker, cancellationToken);
+    private async Task<bool> ProcessLeadForBatchAsync(
+        Lead lead,
+        CampaignBatchType batchType,
+        string marker,
+        ConcurrentDictionary<int, SentEmailSample> sentSamples,
+        CancellationToken cancellationToken)
+        => await ProcessLeadForBatchAsync(batchRepository, lead, batchType, marker, sentSamples, cancellationToken);
 
-    private async Task<bool> ProcessLeadForBatchAsync(IBatchRepository repository, Lead lead, CampaignBatchType batchType, string marker, CancellationToken cancellationToken)
+    private async Task<bool> ProcessLeadForBatchAsync(
+        IBatchRepository repository,
+        Lead lead,
+        CampaignBatchType batchType,
+        string marker,
+        ConcurrentDictionary<int, SentEmailSample> sentSamples,
+        CancellationToken cancellationToken)
     {
         var template = await repository.GetTemplateByBatchTypeAsync(batchType, lead, cancellationToken);
         if (template is null)
@@ -477,6 +508,10 @@ public class BatchProcessingService(
         {
             return false;
         }
+
+        sentSamples.TryAdd(
+            template.TemplateId,
+            new SentEmailSample(template.TemplateId, template.Subject, resolvedBody, lead.Email));
 
         var sentAtUtc = DateTime.UtcNow;
         lead.LastEmailSentDateUtc = sentAtUtc;
@@ -532,14 +567,7 @@ public class BatchProcessingService(
         return false;
     }
 
-    private async Task SendAdminSummaryAsync(
-        DateTime runDateUtc,
-        CampaignBatchType batchType,
-        int totalProcessed,
-        int successCount,
-        int failureCount,
-        IReadOnlyList<int> stageCounts,
-        CancellationToken cancellationToken)
+    private async Task<List<string>> ResolveAdminRecipientsAsync(CancellationToken cancellationToken)
     {
         var adminEmailConfig = configuration["BatchProcessing:AdminEmail"];
         var configuredRecipients = (adminEmailConfig ?? string.Empty)
@@ -547,7 +575,7 @@ public class BatchProcessingService(
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToList();
 
-        var storedRecipients = await batchRepository.GetAdminReportEmailsAsync(cancellationToken);
+        var storedRecipients = await batchRepository.GetAdminReportEmailsAsync(cancellationToken).ConfigureAwait(false);
 
         var adminRecipients = configuredRecipients
             .Concat(storedRecipients)
@@ -559,6 +587,18 @@ public class BatchProcessingService(
         if (adminRecipients.Count == 0)
         {
             logger.LogWarning("No admin recipients found in BatchProcessing:AdminEmail or AdminBatchReports table.");
+        }
+
+        return adminRecipients;
+    }
+
+    private async Task UpdateAdminReportAggregatesAsync(
+        IReadOnlyList<string> adminRecipients,
+        IReadOnlyList<int> stageCounts,
+        CancellationToken cancellationToken)
+    {
+        if (adminRecipients.Count == 0)
+        {
             return;
         }
 
@@ -571,29 +611,70 @@ public class BatchProcessingService(
                 stageCounts[2],
                 stageCounts[3],
                 stageCounts[4],
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static string FormatCampaignBatchTypeLabel(CampaignBatchType batchType) => batchType switch
+    {
+        CampaignBatchType.Day1 => "Day 1",
+        CampaignBatchType.Day2 => "Day 2",
+        CampaignBatchType.Day3 => "Day 3",
+        CampaignBatchType.Day4 => "Day 4",
+        _ => batchType.ToString()
+    };
+
+    private async Task SendBatchMirrorEmailToAdminsAsync(
+        IReadOnlyList<string> adminRecipients,
+        CampaignBatchType batchType,
+        DateTime runUtc,
+        IEnumerable<SentEmailSample> samples,
+        CancellationToken cancellationToken)
+    {
+        var ordered = samples.OrderBy(s => s.TemplateId).ToList();
+        if (adminRecipients.Count == 0 || ordered.Count == 0)
+        {
+            return;
         }
 
-        var subject = $"[Batch Summary] {FormatCampaignBatchTypeLabel(batchType)} — {runDateUtc.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)}";
-        var recipientSections = await BuildRecipientPreviewSectionsAsync(batchType, stageCounts, cancellationToken).ConfigureAwait(false);
-        var body = BuildBatchSummaryEmailHtml(
-            runDateUtc,
-            batchType,
-            totalProcessed,
-            successCount,
-            failureCount,
-            stageCounts,
-            recipientSections);
+        var subject = ordered.Count == 1
+            ? ordered[0].Subject
+            : $"[Batch mirror] {FormatCampaignBatchTypeLabel(batchType)} — {ordered.Count} variants ({runUtc:yyyy-MM-dd HH:mm} UTC)";
+
+        string htmlBody;
+        if (ordered.Count == 1)
+        {
+            htmlBody = ordered[0].HtmlBody;
+        }
+        else
+        {
+            var body = new StringBuilder();
+            body.Append("""<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#022232;">""");
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var s = ordered[i];
+                body.Append("""<div style="margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid #ccc;">""");
+                body.Append("""<p style="margin:0 0 12px;font-size:12px;color:#555;">""");
+                body.Append(WebUtility.HtmlEncode(
+                    $"Variant {i + 1} of {ordered.Count} — example recipient: {s.ExampleRecipientEmail}"));
+                body.Append("</p>");
+                body.Append(s.HtmlBody);
+                body.Append("</div>");
+            }
+
+            body.Append("</div>");
+            htmlBody = body.ToString();
+        }
 
         foreach (var recipient in adminRecipients)
         {
             try
             {
-                await SendAdminEmailWithoutBccAsync(recipient, subject, body, cancellationToken);
+                await SendAdminEmailWithoutBccAsync(recipient, subject, htmlBody, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to send admin batch summary email to {Recipient}.", recipient);
+                logger.LogError(ex, "Failed to send batch mirror email to {Recipient}.", recipient);
             }
         }
     }
@@ -623,7 +704,9 @@ public class BatchProcessingService(
     {
         var eventName = $"batch_{batchType.ToString().ToLowerInvariant()}";
         var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
-        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) && !string.IsNullOrWhiteSpace(template.CtaLink))
+        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
+            !string.IsNullOrWhiteSpace(template.CtaLink) &&
+            !ContainsInlineCta(resolvedBody))
         {
             var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
             var href = useTrackedCta ? BuildTrackedClickUrl(lead, resolvedLink) : resolvedLink;
@@ -638,111 +721,16 @@ public class BatchProcessingService(
         return resolvedBody;
     }
 
-    private async Task<string> BuildRecipientPreviewSectionsAsync(
-        CampaignBatchType batchType,
-        IReadOnlyList<int> stageCounts,
-        CancellationToken cancellationToken)
+    private static bool ContainsInlineCta(string htmlBody)
     {
-        var stages = GetPreviewStagesForRecipientEmail(batchType, stageCounts);
-        var seenTemplates = new HashSet<int>();
-        var sections = new StringBuilder();
-
-        foreach (var stage in stages)
+        if (string.IsNullOrWhiteSpace(htmlBody))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var sampleLead = CreateSamplePreviewLead(stage);
-            var template = await batchRepository.GetTemplateByBatchTypeAsync(batchType, sampleLead, cancellationToken).ConfigureAwait(false);
-            if (template is null || !seenTemplates.Add(template.TemplateId))
-            {
-                continue;
-            }
-
-            var bodyHtml = ComposeBatchEmailHtml(template, sampleLead, batchType, useTrackedCta: false);
-            var subjectText = WebUtility.HtmlEncode(template.Subject);
-            var templateName = WebUtility.HtmlEncode(template.Name);
-            var audienceHint = WebUtility.HtmlEncode(DescribePreviewAudience(batchType, stage));
-
-            sections.Append(CultureInfo.InvariantCulture, $"""
-
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;background-color:#0a3550;border-radius:6px;">
-<tr>
-<td width="8" bgcolor="#6af47c" style="width:8px;background-color:#6af47c;font-size:1px;line-height:1px;">&nbsp;</td>
-<td style="padding:18px 20px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-<tr>
-<td style="vertical-align:top;width:142px;padding:0 16px 0 0;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<span style="display:block;font-size:11px;font-weight:700;letter-spacing:0.1em;color:#6af47c;text-transform:uppercase;">Recipients</span>
-<span style="display:block;margin-top:8px;font-size:13px;line-height:1.4;color:#ffffff;font-weight:600;">What they received</span>
-<span style="display:block;margin-top:8px;font-size:12px;line-height:1.45;color:#9ec9da;">{audienceHint}</span>
-</td>
-<td style="vertical-align:top;border-left:1px solid #144a62;padding:0 0 0 16px;">
-<span style="display:block;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Template name</span>
-<span style="display:block;margin-top:4px;font-size:14px;color:#d8f3ff;font-weight:600;">{templateName}</span>
-<span style="display:block;margin-top:12px;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Subject line</span>
-<span style="display:block;margin-top:4px;font-size:15px;line-height:1.35;color:#ffffff;">{subjectText}</span>
-<span style="display:block;margin-top:14px;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Message body</span>
-<span style="display:block;margin-top:6px;font-size:11px;line-height:1.45;color:#8db6c9;">Preview uses sample merge data (e.g. example email). Live sends use tracking on links where enabled.</span>
-<div style="margin-top:12px;background-color:#ffffff;border-radius:6px;padding:14px;color:#022232;font-family:Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;">
-""");
-            sections.Append(bodyHtml);
-            sections.Append("""
-</div>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-</table>
-""");
+            return false;
         }
 
-        return sections.Length == 0 ? string.Empty : sections.ToString();
+        return htmlBody.Contains("<a ", StringComparison.OrdinalIgnoreCase) ||
+               htmlBody.Contains("class=\"cta-button\"", StringComparison.OrdinalIgnoreCase);
     }
-
-    private static Lead CreateSamplePreviewLead(LeadStage stage) => new()
-    {
-        Id = Guid.Parse("00000000-0000-4000-8000-000000000001"),
-        Email = "recipient@example.com",
-        FirstName = "Jordan",
-        LastName = "Sample",
-        Stage = stage,
-        ProductId = null
-    };
-
-    private static IEnumerable<LeadStage> GetPreviewStagesForRecipientEmail(
-        CampaignBatchType batchType,
-        IReadOnlyList<int> stageCounts)
-    {
-        return batchType switch
-        {
-            CampaignBatchType.Day1 or CampaignBatchType.Day2 => new[] { LeadStage.Cold },
-            CampaignBatchType.Day3 => new[] { LeadStage.Cold, LeadStage.Warm, LeadStage.Mql, LeadStage.Hot }
-                .Where(s => stageCounts[MapStage(s)] > 0),
-            CampaignBatchType.Day4 => new[] { LeadStage.Mql, LeadStage.Hot }
-                .Where(s => stageCounts[MapStage(s)] > 0),
-            _ => Enumerable.Empty<LeadStage>()
-        };
-    }
-
-    private static string DescribePreviewAudience(CampaignBatchType batchType, LeadStage stage) => batchType switch
-    {
-        CampaignBatchType.Day1 or CampaignBatchType.Day2 => "Cold leads — same template as in this batch run.",
-        CampaignBatchType.Day3 => stage switch
-        {
-            LeadStage.Cold => "Cold stage template (used for Cold leads on Day 3).",
-            LeadStage.Warm => "Warm stage template (used for Warm leads on Day 3).",
-            LeadStage.Mql => "MQL stage template (used for MQL leads on Day 3).",
-            LeadStage.Hot => "Hot stage template (used for Hot leads on Day 3).",
-            _ => "Stage-specific template."
-        },
-        CampaignBatchType.Day4 => stage switch
-        {
-            LeadStage.Mql => "Follow-up template for engaged MQL leads without recent activity.",
-            LeadStage.Hot => "Follow-up template for engaged Hot leads without recent activity.",
-            _ => "Follow-up template."
-        },
-        _ => $"Template selected for audience in {stage} stage."
-    };
 
     private async Task<CampaignBatchType> GetNextBatchTypeAsync(CancellationToken cancellationToken)
     {
@@ -767,127 +755,6 @@ public class BatchProcessingService(
             CampaignBatchType.Day4 => await batchRepository.GetDay4LeadsAsync(runDateUtc, cancellationToken),
             _ => []
         };
-    }
-
-    private static string FormatCampaignBatchTypeLabel(CampaignBatchType batchType) => batchType switch
-    {
-        CampaignBatchType.Day1 => "Day 1",
-        CampaignBatchType.Day2 => "Day 2",
-        CampaignBatchType.Day3 => "Day 3",
-        CampaignBatchType.Day4 => "Day 4",
-        _ => batchType.ToString()
-    };
-
-    private static string BuildBatchSummaryEmailHtml(
-        DateTime runDateUtc,
-        CampaignBatchType batchType,
-        int totalProcessed,
-        int successCount,
-        int failureCount,
-        IReadOnlyList<int> stageCounts,
-        string recipientPreviewSectionsHtml)
-    {
-        var batchLabel = WebUtility.HtmlEncode(FormatCampaignBatchTypeLabel(batchType));
-        var executionReadable = WebUtility.HtmlEncode(
-            runDateUtc.ToString("dddd, MMMM d, yyyy 'at' HH:mm:ss 'UTC'", CultureInfo.InvariantCulture));
-        var executionIso = WebUtility.HtmlEncode(runDateUtc.ToString("O", CultureInfo.InvariantCulture));
-
-        var successColor = "#6af47c";
-        var failColor = failureCount > 0 ? "#ff8a8a" : "#9ec9da";
-
-        var stageLabels = new[] { ("Cold", "Stage 0"), ("Warm", "Stage 1"), ("MQL", "Stage 2"), ("Hot", "Stage 3"), ("Other", "Stage 4") };
-        var stageRows = new StringBuilder();
-        for (var i = 0; i < 5; i++)
-        {
-            var (name, indexLabel) = stageLabels[i];
-            stageRows.Append(CultureInfo.InvariantCulture, $"""
-              <tr>
-                <td style="padding:10px 14px;border-bottom:1px solid #144a62;font-size:14px;color:#d8f3ff;">{WebUtility.HtmlEncode(name)} <span style="color:#9ec9da;font-size:12px;">({WebUtility.HtmlEncode(indexLabel)})</span></td>
-                <td align="right" style="padding:10px 14px;border-bottom:1px solid #144a62;font-size:14px;font-weight:700;color:#ffffff;">{stageCounts[i]}</td>
-              </tr>
-              """);
-        }
-
-        return $"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width"/>
-<title>Batch summary</title>
-</head>
-<body style="margin:0;padding:0;background-color:#021f33;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#021f33;padding:24px 12px;">
-<tr>
-<td align="center">
-<table role="presentation" width="600" cellspacing="0" cellpadding="0" bgcolor="#032844" style="max-width:600px;width:100%;background-color:#032844;border-radius:8px;">
-<tr>
-<td style="padding:28px 28px 16px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<div style="font-size:12px;font-weight:700;letter-spacing:0.14em;color:#6af47c;text-transform:uppercase;">HIPERBRAINS</div>
-<h1 style="margin:14px 0 0;font-size:24px;line-height:1.25;color:#ffffff;font-weight:700;">Lead campaign batch summary</h1>
-<p style="margin:12px 0 0;font-size:15px;line-height:1.55;color:#d8f3ff;">Results from your latest scheduled outreach batch.</p>
-</td>
-</tr>
-<tr>
-<td style="padding:0 28px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#0a3550" style="background-color:#0a3550;border-radius:6px;margin-bottom:8px;">
-<tr>
-<td style="padding:16px 18px;border-bottom:1px solid #144a62;">
-<span style="display:block;font-size:11px;letter-spacing:0.06em;color:#9ec9da;text-transform:uppercase;font-weight:600;">Batch type</span>
-<span style="display:block;margin-top:4px;font-size:16px;font-weight:700;color:#ffffff;">{batchLabel}</span>
-</td>
-</tr>
-<tr>
-<td style="padding:16px 18px;border-bottom:1px solid #144a62;">
-<span style="display:block;font-size:11px;letter-spacing:0.06em;color:#9ec9da;text-transform:uppercase;font-weight:600;">Execution (UTC)</span>
-<span style="display:block;margin-top:4px;font-size:16px;font-weight:600;color:#ffffff;">{executionReadable}</span>
-<span style="display:block;margin-top:4px;font-size:12px;color:#9ec9da;">Technical: {executionIso}</span>
-</td>
-</tr>
-<tr>
-<td style="padding:16px 18px;font-size:0;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-<tr>
-<td width="33%" valign="top" style="padding:8px;font-size:14px;color:#d8f3ff;">
-<span style="display:block;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Processed</span>
-<span style="display:block;margin-top:6px;font-size:22px;font-weight:700;color:#ffffff;">{totalProcessed}</span>
-</td>
-<td width="33%" valign="top" style="padding:8px;font-size:14px;color:#d8f3ff;">
-<span style="display:block;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Sent</span>
-<span style="display:block;margin-top:6px;font-size:22px;font-weight:700;color:{successColor};">{successCount}</span>
-</td>
-<td width="33%" valign="top" style="padding:8px;font-size:14px;color:#d8f3ff;">
-<span style="display:block;font-size:11px;color:#9ec9da;text-transform:uppercase;font-weight:600;">Failed</span>
-<span style="display:block;margin-top:6px;font-size:22px;font-weight:700;color:{failColor};">{failureCount}</span>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-<tr>
-<td style="padding:8px 28px 8px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<h2 style="margin:0;font-size:15px;color:#ffffff;font-weight:700;">Leads by stage</h2>
-<p style="margin:6px 0 0;font-size:13px;color:#9ec9da;line-height:1.4;">Count of leads touched in this run, grouped by pipeline stage.</p>
-</td>
-</tr>
-<tr>
-<td style="padding:0 28px 28px;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#0a3550" style="background-color:#0a3550;border-radius:6px;">
-{stageRows}</table>
-{recipientPreviewSectionsHtml}
-<p style="margin:18px 0 0;font-size:11px;line-height:1.45;color:#6a93a8;">This is an automated report from Lead Scoring. Please do not reply to this message.</p>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>
-""";
     }
 
     private static int MapStage(LeadStage stage) => stage switch
