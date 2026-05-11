@@ -1,6 +1,7 @@
 using LeadScoring.Api;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
+using LeadScoring.Api.Models;
 using LeadScoring.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,8 @@ namespace LeadScoring.Api.Controllers;
 public class LeadsController(
     LeadScoringDbContext db,
     LeadImportService leadImportService,
-    VisitorAttributionService visitorAttributionService) : ControllerBase
+    VisitorAttributionService visitorAttributionService,
+    LeadScoringService leadScoringService) : ControllerBase
 {
     [HttpGet("{leadId:guid}/events")]
     public async Task<ActionResult<LeadEventsResponse>> GetLeadEvents(Guid leadId)
@@ -182,6 +184,49 @@ public class LeadsController(
         {
             message = "Manual send-welcome-email endpoint is disabled. Use batch runner and follow-up scheduler flows only."
         });
+    }
+    [HttpPost("test-stage-email")]
+    public async Task<ActionResult<SendStageTemplateTestEmailResponse>> SendTestStageEmail([FromBody] SendStageTemplateTestEmailRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest("email is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Stage))
+        {
+            return BadRequest("stage is required.");
+        }
+
+        if (!Enum.TryParse<LeadStage>(request.Stage.Trim(), ignoreCase: true, out var stage))
+        {
+            return BadRequest("stage must be one of: Cold, Warm, Mql, Hot.");
+        }
+
+        var result = await leadScoringService.SendStageTemplateTestEmailAsync(request.Email.Trim(), stage);
+        if (!result.Sent)
+        {
+            if (result.Message.StartsWith("No active template found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(new SendStageTemplateTestEmailResponse(
+                    request.Email.Trim(),
+                    stage.ToString(),
+                    Sent: false,
+                    result.Message));
+            }
+
+            return BadRequest(new SendStageTemplateTestEmailResponse(
+                request.Email.Trim(),
+                stage.ToString(),
+                Sent: false,
+                result.Message));
+        }
+
+        return Ok(new SendStageTemplateTestEmailResponse(
+            request.Email.Trim(),
+            stage.ToString(),
+            Sent: true,
+            result.Message));
     }
 
 }

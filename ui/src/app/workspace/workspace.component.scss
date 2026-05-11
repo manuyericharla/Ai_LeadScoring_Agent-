@@ -811,6 +811,34 @@
   margin-top: var(--space-6);
 }
 
+.test-stage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12rem;
+  gap: var(--space-4);
+  align-items: end;
+}
+
+.test-stage-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.test-stage-field label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-text-heading);
+}
+
+.test-stage-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
 .manual-batch-field--type > .caption-muted {
   margin-top: var(--space-2);
 }
@@ -1321,6 +1349,10 @@
   }
 
   .tracking-row-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .test-stage-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -1022,3 +1022,41 @@
     </nav>
   </app-card>
 </div>
+
+<div *ngIf="activeTab === 'test-stage-email'">
+  <app-workspace-top-bar
+    title="Test Stage Email"
+    subtitle="Temporary tool to manually send any stage template to a chosen email."
+  />
+
+  <app-card heading="Send test email">
+    <div class="test-stage-grid">
+      <app-input
+        label="Email"
+        [(ngModel)]="testStageEmail"
+        name="testStageEmail"
+        placeholder="test@example.com"
+        [fullWidth]="true"
+      />
+      <div class="test-stage-field">
+        <label for="testStageSelect">Stage</label>
+        <select id="testStageSelect" class="ws-select" [(ngModel)]="testStageValue" name="testStageValue">
+          <option [ngValue]="'Cold'">Cold</option>
+          <option [ngValue]="'Warm'">Warm</option>
+          <option [ngValue]="'Mql'">MQL</option>
+          <option [ngValue]="'Hot'">Hot</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="test-stage-actions">
+      <app-button variant="primary" type="button" [loading]="testStageSending" [disabled]="testStageSending" (click)="sendTestStageEmail()">
+        Send
+      </app-button>
+    </div>
+
+    <p class="flash flash-success" *ngIf="testStageSuccess">{{ testStageSuccess }}</p>
+    <p class="flash flash-error" *ngIf="testStageError">{{ testStageError }}</p>
+    <p class="caption-muted">Temporary admin tool. Remove after template QA is complete.</p>
+  </app-card>
+</div>

@@ -120,6 +120,11 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
   private manualRunPollTimer?: ReturnType<typeof setInterval>;
   manualLoading = false;
   manualError = '';
+  testStageEmail = '';
+  testStageValue: StageName = 'Cold';
+  testStageSending = false;
+  testStageSuccess = '';
+  testStageError = '';
 
   /** Selected lead bucket for Manual Batch. Changing scope resets leads-to-process to the full bucket size. */
   get manualScope(): ManualScope {
@@ -432,6 +437,36 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
         this.error = `Failed to load dashboard from ${this.apiBase}. Check API URL and CORS.`;
       }
     });
+  }
+
+  sendTestStageEmail(): void {
+    this.testStageSuccess = '';
+    this.testStageError = '';
+    const email = this.testStageEmail.trim();
+    if (!email) {
+      this.testStageError = 'Email is required.';
+      return;
+    }
+
+    this.testStageSending = true;
+    this.http
+      .post<TestStageEmailResponse>(`${this.apiBase}/api/leads/test-stage-email`, {
+        email,
+        stage: this.testStageValue
+      })
+      .pipe(finalize(() => (this.testStageSending = false)))
+      .subscribe({
+        next: (res) => {
+          this.testStageSuccess = res.message || `Test email sent for ${this.testStageValue}.`;
+        },
+        error: (err) => {
+          const apiMessage = err?.error?.message ?? err?.error;
+          this.testStageError =
+            typeof apiMessage === 'string' && apiMessage.trim()
+              ? apiMessage
+              : 'Failed to send test stage email. Check API and try again.';
+        }
+      });
   }
 
   onFileSelected(event: Event): void {
@@ -1312,7 +1347,7 @@ interface CompanyProductConfig {
   createdAtUtc: string;
 }
 
-type LeftTab = 'dashboard' | 'leads' | 'company-config' | 'tracking-links' | 'manual-batch';
+type LeftTab = 'dashboard' | 'leads' | 'company-config' | 'tracking-links' | 'manual-batch' | 'test-stage-email';
 type ManualBatchType = 'Day1' | 'Day2' | 'Day3' | 'Day4';
 type ManualScope =
   | 'TotalEligible'
@@ -1389,4 +1424,11 @@ interface BatchLogHistoryRow {
   totalLeadsProcessed: number;
   successCount: number;
   failureCount: number;
+}
+
+interface TestStageEmailResponse {
+  email: string;
+  stage: string;
+  sent: boolean;
+  message: string;
 }

@@ -13,6 +13,7 @@ public class LeadScoringService(
     IConfiguration configuration,
     IFollowUpSubjectGenerator followUpSubjectGenerator)
 {
+    public record StageTemplateTestEmailResult(bool Sent, string Message);
     public async Task AddEventAsync(LeadEvent leadEvent)
     {
         if (leadEvent.LeadId is null)
@@ -196,7 +197,70 @@ public class LeadScoringService(
 
         await db.SaveChangesAsync(cancellationToken);
     }
+ public async Task<StageTemplateTestEmailResult> SendStageTemplateTestEmailAsync(string email, LeadStage stage)
+    {
+        var normalizedEmail = email.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            return new StageTemplateTestEmailResult(false, "Email is required.");
+        }
 
+        var existingLead = await db.Leads
+            .AsNoTracking()
+            .FirstOrDefaultAsync(l => EF.Functions.ILike(l.Email, normalizedEmail));
+
+        var template = await db.EmailTemplates
+            .Where(t =>
+                t.IsActive &&
+                !t.IsFollowUp &&
+                !EF.Functions.ILike(t.Name, "%dummy%") &&
+                t.Stage == stage &&
+                (existingLead == null || t.ProductId == existingLead.ProductId || t.ProductId == null))
+            .OrderByDescending(t => existingLead != null && t.ProductId == existingLead.ProductId)
+            .ThenByDescending(t => t.UpdatedAt ?? t.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (template is null)
+        {
+            return new StageTemplateTestEmailResult(false, $"No active template found for stage '{stage}'.");
+        }
+
+        var previewLead = new Lead
+        {
+            Id = existingLead?.Id ?? Guid.NewGuid(),
+            Email = normalizedEmail,
+            Stage = stage,
+            ProductId = existingLead?.ProductId
+        };
+
+        var eventName = $"lead_stage_test_{stage.ToString().ToLowerInvariant()}";
+        var resolvedBody = ResolveTemplate(template.EmailBodyHtml, previewLead, eventName, template.IsTrackingEnabled);
+
+        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
+            !string.IsNullOrWhiteSpace(template.CtaLink) &&
+            !ContainsInlineCta(resolvedBody))
+        {
+            var resolvedLink = ResolveTemplate(template.CtaLink, previewLead, eventName, template.IsTrackingEnabled);
+            var trackedLink = BuildTrackedClickUrl(previewLead, resolvedLink);
+            resolvedBody += $"""
+
+                <p style="margin-top:20px;">
+                  <a href="{trackedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
+                </p>
+                """;
+        }
+
+        try
+        {
+            await emailService.SendAsync(normalizedEmail, template.Subject, resolvedBody);
+            return new StageTemplateTestEmailResult(true, $"Test email sent for stage '{stage}'.");
+        }
+        catch (Exception ex)
+        {
+            return new StageTemplateTestEmailResult(false, $"Email send failed: {ex.Message}");
+        }
+    }
+	
     private static LeadStage ResolveStage(int score)
     {
         return score switch
