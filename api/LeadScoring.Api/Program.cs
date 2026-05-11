@@ -3,6 +3,8 @@ using LeadScoring.Api.Data;
 using LeadScoring.Api.Repositories;
 using LeadScoring.Api.Services;
 using System.Net;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -84,11 +86,64 @@ builder.Services.AddCors(opt =>
         .AllowCredentials());
 });
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
 
 app.UseRouting();
 app.UseCors();
-app.UseStaticFiles();
+
+var configuredEmailImagesPath = app.Configuration["PublicAssets:EmailImagesPhysicalPath"];
+var emailImagesSourcePath = ResolveEmailImagesSourcePath(configuredEmailImagesPath, app.Environment.ContentRootPath);
+
+var emailImagesRequestPath = app.Configuration["PublicAssets:EmailImagesRequestPath"];
+if (string.IsNullOrWhiteSpace(emailImagesRequestPath))
+{
+    emailImagesRequestPath = "/assets/images";
+}
+if (!emailImagesRequestPath.StartsWith('/'))
+{
+    emailImagesRequestPath = $"/{emailImagesRequestPath}";
+}
+
+if (Directory.Exists(emailImagesSourcePath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(emailImagesSourcePath),
+        RequestPath = emailImagesRequestPath,
+        OnPrepareResponse = ctx =>
+        {
+            // Public email assets: allow any origin to fetch images.
+            ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = "*";
+            ctx.Context.Response.Headers["Access-Control-Allow-Methods"] = "GET,HEAD,OPTIONS";
+            ctx.Context.Response.Headers["Access-Control-Allow-Headers"] = "*";
+            ctx.Context.Response.Headers["Cross-Origin-Resource-Policy"] = "cross-origin";
+            ctx.Context.Response.Headers["Timing-Allow-Origin"] = "*";
+            ctx.Context.Response.Headers.Remove("Content-Security-Policy");
+            ctx.Context.Response.Headers["Cache-Control"] = "public,max-age=31536000,immutable";
+            ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        }
+    });
+}
+else
+{
+    app.Logger.LogWarning("Email image static path not found. Configured path: {ConfiguredPath}. Resolved path: {ResolvedPath}",
+        configuredEmailImagesPath,
+        emailImagesSourcePath);
+}
 
 // Authenticated JSON endpoints must not be cached by browsers/CDNs/reverse proxies.
 // Without this, conditional GETs (If-None-Match / If-Modified-Since) can return 304 with no
@@ -100,7 +155,7 @@ app.Use(async (context, next) =>
         var path = context.Request.Path.Value ?? string.Empty;
         if (!path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase) &&
             !path.Equals("/health", StringComparison.OrdinalIgnoreCase) &&
-            !path.StartsWith("/email-assets/", StringComparison.OrdinalIgnoreCase))
+            !path.StartsWith(emailImagesRequestPath, StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0";
             context.Response.Headers["Pragma"] = "no-cache";
@@ -158,4 +213,36 @@ static bool IsPrivateNetworkHost(string host)
                (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
                (bytes[0] == 192 && bytes[1] == 168)
            );
+}
+
+static string ResolveEmailImagesSourcePath(string? configuredPath, string contentRootPath)
+{
+    if (!string.IsNullOrWhiteSpace(configuredPath))
+    {
+        var explicitPath = Path.GetFullPath(configuredPath);
+        if (Directory.Exists(explicitPath))
+        {
+            return explicitPath;
+        }
+    }
+
+    var candidatePaths = new[]
+    {
+        Path.Combine(contentRootPath, "..", "..", "ui", "src", "assets", "images"),
+        Path.Combine(contentRootPath, "..", "..", "..", "..", "ui", "src", "assets", "images"),
+        Path.Combine(contentRootPath, "ui", "src", "assets", "images"),
+        Path.Combine(Directory.GetCurrentDirectory(), "ui", "src", "assets", "images"),
+        Path.Combine(Directory.GetCurrentDirectory(), "..", "ui", "src", "assets", "images")
+    };
+
+    foreach (var candidate in candidatePaths)
+    {
+        var fullPath = Path.GetFullPath(candidate);
+        if (Directory.Exists(fullPath))
+        {
+            return fullPath;
+        }
+    }
+
+    return Path.GetFullPath(candidatePaths[0]);
 }

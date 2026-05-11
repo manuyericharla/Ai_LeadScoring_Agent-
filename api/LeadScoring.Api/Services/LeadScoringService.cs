@@ -455,18 +455,7 @@ public class LeadScoringService(
         }
     }
 
-    private string GetEmailAssetsBaseUrl()
-    {
-        var configured = configuration["Email:AssetsBaseUrl"];
-        if (!string.IsNullOrWhiteSpace(configured))
-        {
-            return configured.Trim().TrimEnd('/');
-        }
-
-        return (configuration["Tracking:BaseUrl"] ?? "http://localhost:8211").Trim().TrimEnd('/');
-    }
-
-    private string ResolveTemplate(string value, Lead lead, string eventName, bool trackingEnabled)
+    private static string ResolveTemplate(string value, Lead lead, string eventName, bool trackingEnabled)
     {
         var leadId = lead.Id.ToString("D");
         var emailValue = trackingEnabled ? Uri.EscapeDataString(lead.Email) : lead.Email;
@@ -474,7 +463,6 @@ public class LeadScoringService(
         var leadIdValue = trackingEnabled ? Uri.EscapeDataString(leadId) : leadId;
 
         return value
-            .Replace("{{assetsBaseUrl}}", GetEmailAssetsBaseUrl(), StringComparison.OrdinalIgnoreCase)
             .Replace("{{email}}", emailValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
