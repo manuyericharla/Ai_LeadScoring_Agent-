@@ -11,6 +11,7 @@ import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
+import { PublicImageUrlService } from '../shared/services/public-image-url.service';
 
 @Component({
   selector: 'app-email-capture',
@@ -21,6 +22,7 @@ import { firstValueFrom } from 'rxjs';
 })
 export class EmailCaptureComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly http = inject(HttpClient);
+  private readonly publicImageUrl = inject(PublicImageUrlService);
 
   @ViewChild('emailGate', { read: ElementRef }) private emailGateEl?: ElementRef<HTMLInputElement>;
 
@@ -40,6 +42,16 @@ export class EmailCaptureComponent implements OnInit, AfterViewInit, OnDestroy {
   private pageEnteredMs = Date.now();
   private alreadyCaptured = false;
   private hintEmail: string | null = null;
+
+  // Example usage for email templates/previews
+  readonly emailImageUrls = this.publicImageUrl.getEmailImageUrls([
+    'logo.png',
+    'hero-banner.jpg',
+    'facebook.png',
+    'instagram.png',
+    'x.png',
+    'youtube.png'
+  ]);
 
   /**
    * Chrome often defers autofill until focus; a one-time readonly shim helps autofill apply on first tap.
