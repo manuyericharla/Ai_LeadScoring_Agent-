@@ -195,7 +195,7 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<AdminBatchReport> UpsertAdminReportAsync(
+    public async Task<AdminBatchReport?> UpdateAdminReportAsync(
         string email,
         int stage0Count,
         int stage1Count,
@@ -205,18 +205,12 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
         CancellationToken cancellationToken)
     {
         var entity = await db.AdminBatchReports.FirstOrDefaultAsync(x => x.Email == email, cancellationToken);
-        var utcNow = DateTime.UtcNow;
         if (entity is null)
         {
-            entity = new AdminBatchReport
-            {
-                Email = email,
-                CreatedDate = utcNow
-            };
-            await db.AdminBatchReports.AddAsync(entity, cancellationToken);
+            return null;
         }
 
-        entity.UpdatedDate = utcNow;
+        entity.UpdatedDate = DateTime.UtcNow;
         entity.Stage0Count = stage0Count;
         entity.Stage1Count = stage1Count;
         entity.Stage2Count = stage2Count;

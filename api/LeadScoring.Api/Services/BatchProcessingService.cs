@@ -569,16 +569,9 @@ public class BatchProcessingService(
 
     private async Task<List<string>> ResolveAdminRecipientsAsync(CancellationToken cancellationToken)
     {
-        var adminEmailConfig = configuration["BatchProcessing:AdminEmail"];
-        var configuredRecipients = (adminEmailConfig ?? string.Empty)
-            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToList();
-
         var storedRecipients = await batchRepository.GetAdminReportEmailsAsync(cancellationToken).ConfigureAwait(false);
 
-        var adminRecipients = configuredRecipients
-            .Concat(storedRecipients)
+        var adminRecipients = storedRecipients
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -586,7 +579,7 @@ public class BatchProcessingService(
 
         if (adminRecipients.Count == 0)
         {
-            logger.LogWarning("No admin recipients found in BatchProcessing:AdminEmail or AdminBatchReports table.");
+            logger.LogWarning("No admin recipients found in AdminBatchReports table. Add a row to that table to enable admin batch emails.");
         }
 
         return adminRecipients;
@@ -604,7 +597,7 @@ public class BatchProcessingService(
 
         foreach (var recipient in adminRecipients)
         {
-            await batchRepository.UpsertAdminReportAsync(
+            var updated = await batchRepository.UpdateAdminReportAsync(
                 recipient,
                 stageCounts[0],
                 stageCounts[1],
@@ -612,6 +605,13 @@ public class BatchProcessingService(
                 stageCounts[3],
                 stageCounts[4],
                 cancellationToken).ConfigureAwait(false);
+
+            if (updated is null)
+            {
+                logger.LogWarning(
+                    "AdminBatchReports row for {Recipient} not found. Skipping update (no new entry will be created).",
+                    recipient);
+            }
         }
     }
 

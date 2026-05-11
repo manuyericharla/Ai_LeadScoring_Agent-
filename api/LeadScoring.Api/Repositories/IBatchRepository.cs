@@ -19,7 +19,7 @@ public interface IBatchRepository
     Task<EmailTemplate?> GetTemplateByBatchTypeAsync(CampaignBatchType batchType, Lead lead, CancellationToken cancellationToken);
     Task<BatchLog> CreateBatchLogAsync(BatchLog batchLog, CancellationToken cancellationToken);
     Task<List<BatchLog>> GetRecentBatchLogsAsync(int take, CancellationToken cancellationToken);
-    Task<AdminBatchReport> UpsertAdminReportAsync(
+    Task<AdminBatchReport?> UpdateAdminReportAsync(
         string email,
         int stage0Count,
         int stage1Count,
