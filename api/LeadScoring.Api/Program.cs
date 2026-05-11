@@ -88,6 +88,7 @@ var app = builder.Build();
 
 app.UseRouting();
 app.UseCors();
+app.UseStaticFiles();
 
 // Authenticated JSON endpoints must not be cached by browsers/CDNs/reverse proxies.
 // Without this, conditional GETs (If-None-Match / If-Modified-Since) can return 304 with no
@@ -98,7 +99,8 @@ app.Use(async (context, next) =>
     {
         var path = context.Request.Path.Value ?? string.Empty;
         if (!path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase) &&
-            !path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+            !path.Equals("/health", StringComparison.OrdinalIgnoreCase) &&
+            !path.StartsWith("/email-assets/", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0";
             context.Response.Headers["Pragma"] = "no-cache";
