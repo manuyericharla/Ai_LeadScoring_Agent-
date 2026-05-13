@@ -1,6 +1,5 @@
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Models;
-using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +8,6 @@ namespace LeadScoring.Api.Services;
 public class LeadScoringService(
     LeadScoringDbContext db,
     IEmailService emailService,
-    TokenService tokenService,
-    IConfiguration configuration,
     IFollowUpSubjectGenerator followUpSubjectGenerator)
 {
     public record StageTemplateTestEmailResult(bool Sent, string Message);
@@ -157,19 +154,6 @@ public class LeadScoringService(
             var attemptNumber = sentTodayCount + 1;
             var eventName = $"welcome_followup_{attemptNumber}";
             var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
-            if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
-                !string.IsNullOrWhiteSpace(template.CtaLink) &&
-                !ContainsInlineCta(resolvedBody))
-            {
-                var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
-                var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
-                resolvedBody += $"""
-
-                    <p style="margin-top:20px;">
-                      <a href="{trackedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
-                    </p>
-                    """;
-            }
 
             var subject = template.Subject;
             if (attemptNumber is 2 or 3)
@@ -197,7 +181,14 @@ public class LeadScoringService(
 
         await db.SaveChangesAsync(cancellationToken);
     }
- public async Task<StageTemplateTestEmailResult> SendStageTemplateTestEmailAsync(string email, LeadStage stage)
+    /// <summary>
+    /// Sends a stage template preview email. Unlike batch/scheduler flows, inactive templates are allowed
+    /// so QA can test without enabling <see cref="EmailTemplate.IsActive"/> (which would let the scheduler pick them up).
+    /// </summary>
+    public async Task<StageTemplateTestEmailResult> SendStageTemplateTestEmailAsync(
+        string email,
+        LeadStage stage,
+        bool isFollowUp = false)
     {
         var normalizedEmail = email.Trim();
         if (string.IsNullOrWhiteSpace(normalizedEmail))
@@ -211,18 +202,19 @@ public class LeadScoringService(
 
         var template = await db.EmailTemplates
             .Where(t =>
-                t.IsActive &&
-                !t.IsFollowUp &&
+                t.IsFollowUp == isFollowUp &&
                 !EF.Functions.ILike(t.Name, "%dummy%") &&
                 t.Stage == stage &&
                 (existingLead == null || t.ProductId == existingLead.ProductId || t.ProductId == null))
-            .OrderByDescending(t => existingLead != null && t.ProductId == existingLead.ProductId)
+            .OrderByDescending(t => t.IsActive)
+            .ThenByDescending(t => existingLead != null && t.ProductId == existingLead.ProductId)
             .ThenByDescending(t => t.UpdatedAt ?? t.CreatedAt)
             .FirstOrDefaultAsync();
 
         if (template is null)
         {
-            return new StageTemplateTestEmailResult(false, $"No active template found for stage '{stage}'.");
+            var kind = isFollowUp ? "follow-up " : string.Empty;
+            return new StageTemplateTestEmailResult(false, $"No {kind}template found for stage '{stage}' (inactive templates are included for this test tool only).");
         }
 
         var previewLead = new Lead
@@ -236,20 +228,6 @@ public class LeadScoringService(
         var eventName = $"lead_stage_test_{stage.ToString().ToLowerInvariant()}";
         var resolvedBody = ResolveTemplate(template.EmailBodyHtml, previewLead, eventName, template.IsTrackingEnabled);
 
-        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
-            !string.IsNullOrWhiteSpace(template.CtaLink) &&
-            !ContainsInlineCta(resolvedBody))
-        {
-            var resolvedLink = ResolveTemplate(template.CtaLink, previewLead, eventName, template.IsTrackingEnabled);
-            var trackedLink = BuildTrackedClickUrl(previewLead, resolvedLink);
-            resolvedBody += $"""
-
-                <p style="margin-top:20px;">
-                  <a href="{trackedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
-                </p>
-                """;
-        }
-
         try
         {
             await emailService.SendAsync(normalizedEmail, template.Subject, resolvedBody);
@@ -260,7 +238,7 @@ public class LeadScoringService(
             return new StageTemplateTestEmailResult(false, $"Email send failed: {ex.Message}");
         }
     }
-	
+
     private static LeadStage ResolveStage(int score)
     {
         return score switch
@@ -431,20 +409,6 @@ public class LeadScoringService(
         var eventName = $"lead_stage_{lead.Stage.ToString().ToLowerInvariant()}";
         var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
 
-        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
-            !string.IsNullOrWhiteSpace(template.CtaLink) &&
-            !ContainsInlineCta(resolvedBody))
-        {
-            var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
-            var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
-            resolvedBody += $"""
-
-                <p style="margin-top:20px;">
-                  <a href="{trackedLink}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
-                </p>
-                """;
-        }
-
         var sentAtUtc = DateTime.UtcNow;
         await emailService.SendAsync(lead.Email, template.Subject, resolvedBody);
 
@@ -467,28 +431,5 @@ public class LeadScoringService(
             .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{stage}}", lead.Stage.ToString(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool ContainsInlineCta(string htmlBody)
-    {
-        if (string.IsNullOrWhiteSpace(htmlBody))
-        {
-            return false;
-        }
-
-        return htmlBody.Contains("<a ", StringComparison.OrdinalIgnoreCase) ||
-               htmlBody.Contains("class=\"cta-button\"", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private string BuildTrackedClickUrl(Lead lead, string destinationUrl)
-    {
-        if (!Uri.IsWellFormedUriString(destinationUrl, UriKind.Absolute))
-        {
-            return destinationUrl;
-        }
-
-        var token = tokenService.CreateLeadToken(lead.Id);
-        var trackingBaseUrl = (configuration["Tracking:BaseUrl"] ?? "http://localhost:8211").TrimEnd('/');
-        return $"{trackingBaseUrl}/track/click?token={Uri.EscapeDataString(token)}&redirect={Uri.EscapeDataString(destinationUrl)}";
     }
 }

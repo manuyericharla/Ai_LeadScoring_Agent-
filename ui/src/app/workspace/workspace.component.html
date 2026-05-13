@@ -1047,6 +1047,10 @@
           <option [ngValue]="'Hot'">Hot</option>
         </select>
       </div>
+      <label class="test-stage-field test-stage-checkbox">
+        <input type="checkbox" [(ngModel)]="testStageIsFollowUp" name="testStageIsFollowUp" />
+        <span>Follow-up template (extra rows per stage in DB). Initial welcome vs follow-up only; scheduler unchanged.</span>
+      </label>
     </div>
 
     <div class="test-stage-actions">
@@ -1057,6 +1061,6 @@
 
     <p class="flash flash-success" *ngIf="testStageSuccess">{{ testStageSuccess }}</p>
     <p class="flash flash-error" *ngIf="testStageError">{{ testStageError }}</p>
-    <p class="caption-muted">Temporary admin tool. Remove after template QA is complete.</p>
+    <p class="caption-muted">Test send includes inactive templates and does not affect the scheduler (batches still require IsActive).</p>
   </app-card>
 </div>

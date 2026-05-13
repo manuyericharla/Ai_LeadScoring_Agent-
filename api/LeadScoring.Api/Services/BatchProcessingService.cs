@@ -11,7 +11,6 @@ namespace LeadScoring.Api.Services;
 public class BatchProcessingService(
     IBatchRepository batchRepository,
     IEmailService emailService,
-    TokenService tokenService,
     IConfiguration configuration,
     ILogger<BatchProcessingService> logger,
     IServiceScopeFactory scopeFactory,
@@ -501,7 +500,7 @@ public class BatchProcessingService(
         }
 
         var eventName = $"batch_{batchType.ToString().ToLowerInvariant()}";
-        var resolvedBody = ComposeBatchEmailHtml(template, lead, batchType, useTrackedCta: true);
+        var resolvedBody = ComposeBatchEmailHtml(template, lead, batchType);
 
         var sent = await SendWithRetryAsync(lead.Email, template.Subject, resolvedBody, cancellationToken);
         if (!sent)
@@ -700,36 +699,10 @@ public class BatchProcessingService(
         await client.SendMailAsync(message);
     }
 
-    private string ComposeBatchEmailHtml(EmailTemplate template, Lead lead, CampaignBatchType batchType, bool useTrackedCta)
+    private static string ComposeBatchEmailHtml(EmailTemplate template, Lead lead, CampaignBatchType batchType)
     {
         var eventName = $"batch_{batchType.ToString().ToLowerInvariant()}";
-        var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
-        if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
-            !string.IsNullOrWhiteSpace(template.CtaLink) &&
-            !ContainsInlineCta(resolvedBody))
-        {
-            var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
-            var href = useTrackedCta ? BuildTrackedClickUrl(lead, resolvedLink) : resolvedLink;
-            resolvedBody += $"""
-
-                <p style="margin-top:20px;">
-                  <a href="{href}" style="display:inline-block;background:#2de06a;color:#00233c;text-decoration:none;font-weight:700;padding:12px 24px;border-radius:8px;">{WebUtility.HtmlEncode(template.CtaButtonText)}</a>
-                </p>
-                """;
-        }
-
-        return resolvedBody;
-    }
-
-    private static bool ContainsInlineCta(string htmlBody)
-    {
-        if (string.IsNullOrWhiteSpace(htmlBody))
-        {
-            return false;
-        }
-
-        return htmlBody.Contains("<a ", StringComparison.OrdinalIgnoreCase) ||
-               htmlBody.Contains("class=\"cta-button\"", StringComparison.OrdinalIgnoreCase);
+        return ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
     }
 
     private async Task<CampaignBatchType> GetNextBatchTypeAsync(CancellationToken cancellationToken)
@@ -778,17 +751,5 @@ public class BatchProcessingService(
             .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{stage}}", lead.Stage.ToString(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private string BuildTrackedClickUrl(Lead lead, string destinationUrl)
-    {
-        if (!Uri.IsWellFormedUriString(destinationUrl, UriKind.Absolute))
-        {
-            return destinationUrl;
-        }
-
-        var token = tokenService.CreateLeadToken(lead.Id);
-        var trackingBaseUrl = (configuration["Tracking:BaseUrl"] ?? "http://localhost:8211").TrimEnd('/');
-        return $"{trackingBaseUrl}/track/click?token={Uri.EscapeDataString(token)}&redirect={Uri.EscapeDataString(destinationUrl)}";
     }
 }

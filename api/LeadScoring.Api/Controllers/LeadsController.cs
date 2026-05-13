@@ -203,10 +203,13 @@ public class LeadsController(
             return BadRequest("stage must be one of: Cold, Warm, Mql, Hot.");
         }
 
-        var result = await leadScoringService.SendStageTemplateTestEmailAsync(request.Email.Trim(), stage);
+        var result = await leadScoringService.SendStageTemplateTestEmailAsync(
+            request.Email.Trim(),
+            stage,
+            request.IsFollowUp);
         if (!result.Sent)
         {
-            if (result.Message.StartsWith("No active template found", StringComparison.OrdinalIgnoreCase))
+            if (result.Message.Contains("template found for stage", StringComparison.OrdinalIgnoreCase))
             {
                 return NotFound(new SendStageTemplateTestEmailResponse(
                     request.Email.Trim(),

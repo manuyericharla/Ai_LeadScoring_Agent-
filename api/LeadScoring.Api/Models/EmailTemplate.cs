@@ -9,7 +9,10 @@ public class EmailTemplate
     public LeadStage Stage { get; set; }
     public string Subject { get; set; } = string.Empty;
     public string EmailBodyHtml { get; set; } = string.Empty;
+    /// <summary>Legacy column; outbound mail uses <see cref="EmailBodyHtml"/> only (no appended CTA from this field).</summary>
     public string? CtaButtonText { get; set; }
+
+    /// <summary>Legacy column; outbound mail uses <see cref="EmailBodyHtml"/> only (no appended CTA from this field).</summary>
     public string? CtaLink { get; set; }
     public bool IsTrackingEnabled { get; set; }
     public bool IsActive { get; set; } = true;

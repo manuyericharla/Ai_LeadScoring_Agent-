@@ -122,6 +122,8 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
   manualError = '';
   testStageEmail = '';
   testStageValue: StageName = 'Cold';
+  /** When true, matches follow-up rows in EmailTemplates (same stage as dropdown; scheduler still uses IsActive). */
+  testStageIsFollowUp = false;
   testStageSending = false;
   testStageSuccess = '';
   testStageError = '';
@@ -452,7 +454,8 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     this.http
       .post<TestStageEmailResponse>(`${this.apiBase}/api/leads/test-stage-email`, {
         email,
-        stage: this.testStageValue
+        stage: this.testStageValue,
+        isFollowUp: this.testStageIsFollowUp
       })
       .pipe(finalize(() => (this.testStageSending = false)))
       .subscribe({
