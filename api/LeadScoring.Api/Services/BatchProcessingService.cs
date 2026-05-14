@@ -735,7 +735,8 @@ public class BatchProcessingService(
         {
             try
             {
-                await SendAdminEmailWithoutBccAsync(recipient, subject, htmlBody, cancellationToken).ConfigureAwait(false);
+                var mirrorBody = OutboundEmailRecipientLinkRewrite.ApplyRecipientEmailToHiperbrainsLinks(htmlBody, recipient);
+                await SendAdminEmailWithoutBccAsync(recipient, subject, mirrorBody, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
