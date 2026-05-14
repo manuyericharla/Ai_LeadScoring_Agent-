@@ -13,4 +13,5 @@ public interface IBatchProcessingService
     Task<BatchManualRunStartDto> StartManualAsync(CampaignBatchType batchType, string? scope, int? maxLeads, CancellationToken cancellationToken);
     BatchManualRunStatusDto? GetManualStatus(Guid jobId);
     Task<IReadOnlyList<BatchLogHistoryDto>> GetBatchLogHistoryAsync(int take, CancellationToken cancellationToken);
+    Task<TestMarketingEmailResultDto> SendTestMarketingEmailsAsync(TestMarketingEmailRequestDto request, CancellationToken cancellationToken);
 }

@@ -158,7 +158,7 @@ public class LeadScoringService(
             var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
             if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
                 !string.IsNullOrWhiteSpace(template.CtaLink) &&
-                !ContainsInlineCta(resolvedBody))
+                !EmailBodyCtaPolicy.ShouldSuppressAppendedCta(resolvedBody))
             {
                 var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
                 var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
@@ -170,6 +170,8 @@ public class LeadScoringService(
                     """;
             }
 
+            resolvedBody = OutboundEmailRecipientLinkRewrite.ApplyRecipientEmailToHiperbrainsLinks(resolvedBody, lead.Email);
+
             var subject = template.Subject;
             if (attemptNumber is 2 or 3)
             {
@@ -180,7 +182,7 @@ public class LeadScoringService(
                     cancellationToken);
             }
 
-            await emailService.SendAsync(lead.Email, subject, resolvedBody);
+            await emailService.SendAsync(lead.Email, subject, resolvedBody, suppressObserverBcc: true);
 
             lead.LastActivityUtc = nowUtc;
             db.Events.Add(new LeadEvent
@@ -369,7 +371,7 @@ public class LeadScoringService(
 
         if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
             !string.IsNullOrWhiteSpace(template.CtaLink) &&
-            !ContainsInlineCta(resolvedBody))
+            !EmailBodyCtaPolicy.ShouldSuppressAppendedCta(resolvedBody))
         {
             var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
             var trackedLink = BuildTrackedClickUrl(lead, resolvedLink);
@@ -380,6 +382,8 @@ public class LeadScoringService(
                 </p>
                 """;
         }
+
+        resolvedBody = OutboundEmailRecipientLinkRewrite.ApplyRecipientEmailToHiperbrainsLinks(resolvedBody, lead.Email);
 
         var sentAtUtc = DateTime.UtcNow;
         await emailService.SendAsync(lead.Email, template.Subject, resolvedBody);
@@ -403,17 +407,6 @@ public class LeadScoringService(
             .Replace("{{event}}", eventValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{leadId}}", leadIdValue, StringComparison.OrdinalIgnoreCase)
             .Replace("{{stage}}", lead.Stage.ToString(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool ContainsInlineCta(string htmlBody)
-    {
-        if (string.IsNullOrWhiteSpace(htmlBody))
-        {
-            return false;
-        }
-
-        return htmlBody.Contains("<a ", StringComparison.OrdinalIgnoreCase) ||
-               htmlBody.Contains("class=\"cta-button\"", StringComparison.OrdinalIgnoreCase);
     }
 
     private string BuildTrackedClickUrl(Lead lead, string destinationUrl)

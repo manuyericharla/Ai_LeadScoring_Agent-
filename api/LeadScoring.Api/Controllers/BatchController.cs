@@ -66,6 +66,27 @@ public class BatchController(IBatchProcessingService batchProcessingService, ILo
         return Ok(status);
     }
 
+    /// <summary>QA: send manual-batch-style HTML only to listed addresses — no mirror emails, observers, logs, or lead updates.</summary>
+    [HttpPost("test-marketing-send")]
+    [HttpPost("test-email")]
+    public async Task<IActionResult> TestMarketingSend([FromBody] TestMarketingEmailRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await batchProcessingService.SendTestMarketingEmailsAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Test marketing send failed for {BatchType}", request.BatchType);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Test send failed due to internal error." });
+        }
+    }
+
     [HttpPost("retry/{batchId:long}")]
     public async Task<IActionResult> Retry(long batchId, CancellationToken cancellationToken)
     {

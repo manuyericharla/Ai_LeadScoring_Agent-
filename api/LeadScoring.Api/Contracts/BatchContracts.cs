@@ -75,3 +75,21 @@ public record BatchLogHistoryDto(
     int TotalLeadsProcessed,
     int SuccessCount,
     int FailureCount);
+
+/// <summary>
+/// Send sequence HTML to specific inboxes without updating leads, batch logs, or admin batches (QA only).
+/// Each address receives the HTML that matches the requested sequence day (<see cref="CampaignBatchType"/>) and, for synthetic lead snapshots, ProductId / TemplateStage.
+/// </summary>
+public record TestMarketingEmailRequestDto(
+    IReadOnlyList<string>? Recipients,
+    string? RecipientsRaw,
+    CampaignBatchType BatchType,
+    int? ProductId,
+    /// <summary>When the recipient is not an existing lead, sets stage for Day3/Day4 template selection (<c>Warm</c>, <c>Mql</c>, <c>Hot</c>). Ignored when a DB lead matches the email.</summary>
+    string? TemplateStage);
+
+public record TestMarketingEmailResultDto(
+    int Attempted,
+    int SuccessCount,
+    int FailureCount,
+    IReadOnlyList<BatchFailureInfoDto> Failures);

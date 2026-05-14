@@ -291,6 +291,29 @@ public class BatchRepository(LeadScoringDbContext db) : IBatchRepository
         return db.Leads.FirstOrDefaultAsync(x => x.Id == leadId, cancellationToken);
     }
 
+    public Task<Lead?> GetLeadByEmailAsync(string email, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return Task.FromResult<Lead?>(null);
+        }
+
+        var e = email.Trim().ToLowerInvariant();
+        return db.Leads
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Email.ToLower() == e, cancellationToken);
+    }
+
+    public Task<int?> GetAnyLeadProductIdAsync(CancellationToken cancellationToken)
+    {
+        return db.Leads
+            .AsNoTracking()
+            .Where(l => l.ProductId != null)
+            .Select(l => l.ProductId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+
     public Task<EmailTemplate?> GetActiveTemplateForStageAsync(LeadStage stage, int? productId, CancellationToken cancellationToken)
     {
         return db.EmailTemplates

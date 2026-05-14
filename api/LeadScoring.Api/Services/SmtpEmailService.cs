@@ -5,7 +5,7 @@ namespace LeadScoring.Api.Services;
 
 public class SmtpEmailService(IConfiguration configuration, ILogger<SmtpEmailService> logger) : IEmailService
 {
-    public async Task SendAsync(string to, string subject, string htmlBody)
+    public async Task SendAsync(string to, string subject, string htmlBody, bool suppressObserverBcc = false)
     {
         var smtpSection = configuration.GetSection("SMTP");
         var emailSection = configuration.GetSection("Email");
@@ -22,8 +22,11 @@ public class SmtpEmailService(IConfiguration configuration, ILogger<SmtpEmailSer
         }
 
         using var message = new MailMessage(fromAddress, to, subject, htmlBody) { IsBodyHtml = true };
-        var observers = EmailAlwaysBcc.GetAddresses(configuration);
-        EmailAlwaysBcc.AddDistinctBcc(message.Bcc, to, observers);
+        if (!suppressObserverBcc)
+        {
+            var observers = EmailAlwaysBcc.GetAddresses(configuration);
+            EmailAlwaysBcc.AddDistinctBcc(message.Bcc, to, observers);
+        }
 
         using var client = new SmtpClient(host, port)
         {

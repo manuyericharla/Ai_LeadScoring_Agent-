@@ -882,6 +882,97 @@
     </div>
   </app-card>
 
+  <app-card
+    heading="Test email delivery"
+    subheading="Uses the sequence day chosen above with the same template HTML as manual batch — only mails the addresses listed here. Leaves leads unchanged, skips batch logs, and does not send admin mirror emails."
+  >
+    <div class="manual-batch-field">
+      <label for="testEmailRecipientsRaw">Recipients</label>
+      <textarea
+        id="testEmailRecipientsRaw"
+        name="testEmailRecipientsRaw"
+        class="link-textarea link-textarea--compact"
+        rows="5"
+        [(ngModel)]="testEmailRecipientsRaw"
+        [disabled]="testEmailSending"
+        placeholder="me@company.com teammate@company.com&#10;&#10;Also accepted: comma- or newline-separated addresses"
+      ></textarea>
+      <p class="caption-muted" *ngIf="parsedTestRecipients.length > 0">
+        {{ parsedTestRecipients.length | number }} valid address(es) queued
+      </p>
+    </div>
+
+    <div class="manual-batch-field">
+      <label for="testEmailProductId">Product ID <span class="caption-muted">(optional)</span></label>
+      <input
+        id="testEmailProductId"
+        name="testEmailProductId"
+        type="text"
+        class="manual-lead-take-input"
+        [(ngModel)]="testEmailProductIdRaw"
+        [disabled]="testEmailSending"
+        placeholder="Infer from CRM when empty"
+      />
+      <p class="caption-muted">When an address matches a saved lead, that lead decides product/score template; otherwise this ID picks product-scoped templates.</p>
+    </div>
+
+    <div class="manual-batch-field" *ngIf="manualBatchType === 'Day3' || manualBatchType === 'Day4'">
+      <label for="testEmailStageHint">Synthetic stage hint</label>
+      <select
+        id="testEmailStageHint"
+        name="testEmailStageHint"
+        class="ws-select ws-select--batch-type"
+        [(ngModel)]="testEmailTemplateStage"
+        [disabled]="testEmailSending"
+      >
+        <option [ngValue]="''">Automatic</option>
+        <option [ngValue]="'Cold'">Cold</option>
+        <option [ngValue]="'Warm'">Warm</option>
+        <option [ngValue]="'Mql'">Mql</option>
+        <option [ngValue]="'Hot'">Hot</option>
+      </select>
+      <p class="caption-muted">Ignored when CRM already has this address.</p>
+    </div>
+
+    <p class="flash flash-error" *ngIf="testEmailError">{{ testEmailError }}</p>
+
+    <div class="manual-batch-footer-actions">
+      <app-button variant="secondary" type="button" [loading]="testEmailSending" [disabled]="!canSendTestEmails" (click)="sendTestEmails()">
+        Send test emails
+      </app-button>
+    </div>
+
+    <div *ngIf="testEmailLastResult" class="manual-batch-results">
+      <h3 class="manual-batch-results-title">Test send outcome</h3>
+      <ul class="manual-batch-result-list">
+        <li><span class="muted-lbl">Attempted</span> {{ testEmailLastResult.attempted | number }}</li>
+        <li><span class="muted-lbl">Delivered</span> {{ testEmailLastResult.successCount | number }}</li>
+        <li><span class="muted-lbl">Failed</span> {{ testEmailLastResult.failureCount | number }}</li>
+      </ul>
+      <div *ngIf="testEmailLastResult.failures.length > 0">
+        <h4 class="manual-batch-failures-heading">Failures</h4>
+        <app-table>
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Lead Id</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let f of testEmailLastResult.failures">
+                <td>{{ f.email }}</td>
+                <td class="cell-muted">{{ f.leadId }}</td>
+                <td class="cell-muted">{{ f.reason }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </app-table>
+      </div>
+    </div>
+  </app-card>
+
   <app-card *ngIf="manualRunResult && !manualLoading" heading="Latest send outcome">
     <div class="manual-batch-results">
       <ul class="manual-batch-result-list">

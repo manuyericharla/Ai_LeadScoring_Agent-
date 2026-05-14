@@ -37,6 +37,13 @@ public interface IBatchRepository
     Task CreateBatchLeadsAsync(IEnumerable<BatchLead> batchLeads, CancellationToken cancellationToken);
     Task<List<BatchLead>> GetFailedBatchLeadsAsync(long batchId, CancellationToken cancellationToken);
     Task<Lead?> GetLeadForUpdateAsync(Guid leadId, CancellationToken cancellationToken);
+
+    /// <summary>Loads a non-tracking snapshot for lookups (e.g. test sends).</summary>
+    Task<Lead?> GetLeadByEmailAsync(string email, CancellationToken cancellationToken);
+
+    /// <summary>Any product id referenced by leads, for synthetic test payloads.</summary>
+    Task<int?> GetAnyLeadProductIdAsync(CancellationToken cancellationToken);
+
     Task<EmailTemplate?> GetActiveTemplateForStageAsync(LeadStage stage, int? productId, CancellationToken cancellationToken);
     Task AddEventAsync(LeadEvent leadEvent, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);

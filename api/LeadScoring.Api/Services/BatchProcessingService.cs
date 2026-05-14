@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Mail;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace LeadScoring.Api.Services;
 
@@ -17,7 +18,7 @@ public class BatchProcessingService(
     IServiceScopeFactory scopeFactory,
     ManualBatchProgressStore progressStore) : IBatchProcessingService
 {
-    private sealed record SentEmailSample(int TemplateId, string Subject, string HtmlBody, string ExampleRecipientEmail);
+    private sealed record SentEmailSample(int TemplateId, bool IsFollowUp, string Subject, string HtmlBody, string ExampleRecipientEmail);
 
     public async Task ProcessActiveConfigsAsync(CancellationToken cancellationToken)
     {
@@ -223,6 +224,65 @@ public class BatchProcessingService(
         }
 
         return list;
+    }
+
+    public async Task<TestMarketingEmailResultDto> SendTestMarketingEmailsAsync(
+        TestMarketingEmailRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var recipients = NormalizeTestRecipients(request);
+        if (recipients.Count == 0)
+        {
+            throw new ArgumentException("Enter at least one valid email address.", nameof(request));
+        }
+
+        var maxRecipients = Math.Clamp(configuration.GetValue<int?>("BatchProcessing:TestMarketingMaxRecipients") ?? 50, 1, 200);
+        if (recipients.Count > maxRecipients)
+        {
+            throw new ArgumentException($"At most {maxRecipients} test recipients are allowed per request.");
+        }
+
+        var syntheticProductId = await ResolveSyntheticProductIdAsync(request.ProductId, cancellationToken).ConfigureAwait(false);
+        var successes = 0;
+        var failures = new List<BatchFailureInfoDto>();
+
+        foreach (var to in recipients)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var surrogate = await ResolveTestSurrogateLeadAsync(
+                to,
+                syntheticProductId,
+                request.BatchType,
+                request.TemplateStage,
+                cancellationToken).ConfigureAwait(false);
+
+            var template = await batchRepository.GetTemplateByBatchTypeAsync(request.BatchType, surrogate, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (template is null)
+            {
+                failures.Add(new BatchFailureInfoDto(surrogate.Id, to, "No active email template for this batch type and lead profile."));
+                continue;
+            }
+
+            var resolvedBody = ComposeBatchEmailHtml(template, surrogate, request.BatchType, useTrackedCta: true);
+
+            var sent = await SendWithRetryAsync(to, template.Subject, resolvedBody, suppressObserverBcc: true, cancellationToken)
+                .ConfigureAwait(false);
+            if (sent)
+            {
+                successes++;
+            }
+            else
+            {
+                failures.Add(new BatchFailureInfoDto(surrogate.Id, to, "Max retries exceeded or SMTP error."));
+            }
+        }
+
+        return new TestMarketingEmailResultDto(recipients.Count, successes, failures.Count, failures);
     }
 
     public async Task<BatchManualRunResultDto> RunManualTrackedAsync(Guid jobId, CampaignBatchType batchType, string? scope, int? maxLeads, CancellationToken cancellationToken)
@@ -503,7 +563,7 @@ public class BatchProcessingService(
         var eventName = $"batch_{batchType.ToString().ToLowerInvariant()}";
         var resolvedBody = ComposeBatchEmailHtml(template, lead, batchType, useTrackedCta: true);
 
-        var sent = await SendWithRetryAsync(lead.Email, template.Subject, resolvedBody, cancellationToken);
+        var sent = await SendWithRetryAsync(lead.Email, template.Subject, resolvedBody, template.IsFollowUp, cancellationToken);
         if (!sent)
         {
             return false;
@@ -511,7 +571,7 @@ public class BatchProcessingService(
 
         sentSamples.TryAdd(
             template.TemplateId,
-            new SentEmailSample(template.TemplateId, template.Subject, resolvedBody, lead.Email));
+            new SentEmailSample(template.TemplateId, template.IsFollowUp, template.Subject, resolvedBody, lead.Email));
 
         var sentAtUtc = DateTime.UtcNow;
         lead.LastEmailSentDateUtc = sentAtUtc;
@@ -539,7 +599,12 @@ public class BatchProcessingService(
         return true;
     }
 
-    private async Task<bool> SendWithRetryAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken)
+    private async Task<bool> SendWithRetryAsync(
+        string to,
+        string subject,
+        string htmlBody,
+        bool suppressObserverBcc,
+        CancellationToken cancellationToken)
     {
         var maxRetries = configuration.GetValue<int?>("BatchProcessing:EmailRetryCount") ?? 3;
         var delayMs = configuration.GetValue<int?>("BatchProcessing:EmailRetryDelayMs") ?? 1000;
@@ -549,7 +614,7 @@ public class BatchProcessingService(
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                await emailService.SendAsync(to, subject, htmlBody);
+                await emailService.SendAsync(to, subject, htmlBody, suppressObserverBcc);
                 return true;
             }
             catch (Exception ex)
@@ -631,7 +696,7 @@ public class BatchProcessingService(
         IEnumerable<SentEmailSample> samples,
         CancellationToken cancellationToken)
     {
-        var ordered = samples.OrderBy(s => s.TemplateId).ToList();
+        var ordered = samples.Where(s => !s.IsFollowUp).OrderBy(s => s.TemplateId).ToList();
         if (adminRecipients.Count == 0 || ordered.Count == 0)
         {
             return;
@@ -700,13 +765,114 @@ public class BatchProcessingService(
         await client.SendMailAsync(message);
     }
 
+    private static IReadOnlyList<string> NormalizeTestRecipients(TestMarketingEmailRequestDto request)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (request.Recipients is not null)
+        {
+            foreach (var r in request.Recipients)
+            {
+                var t = NormalizeOneTestEmail(r);
+                if (t is not null)
+                {
+                    set.Add(t);
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.RecipientsRaw))
+        {
+            foreach (var part in Regex.Split(request.RecipientsRaw.Trim(), @"[\s,;]+", RegexOptions.CultureInvariant))
+            {
+                var t = NormalizeOneTestEmail(part);
+                if (t is not null)
+                {
+                    set.Add(t);
+                }
+            }
+        }
+
+        return set.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static string? NormalizeOneTestEmail(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var t = raw.Trim();
+        if (t.Length > 254 || !t.Contains('@', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return t;
+    }
+
+    private Task<int?> ResolveSyntheticProductIdAsync(int? requested, CancellationToken cancellationToken) =>
+        requested is null ? batchRepository.GetAnyLeadProductIdAsync(cancellationToken) : Task.FromResult(requested);
+
+    private async Task<Lead> ResolveTestSurrogateLeadAsync(
+        string recipientEmail,
+        int? syntheticProductId,
+        CampaignBatchType batchType,
+        string? templateStage,
+        CancellationToken cancellationToken)
+    {
+        var existing = await batchRepository.GetLeadByEmailAsync(recipientEmail, cancellationToken).ConfigureAwait(false);
+        if (existing is not null)
+        {
+            return new Lead
+            {
+                Id = existing.Id,
+                Email = recipientEmail.Trim(),
+                ProductId = existing.ProductId,
+                Stage = existing.Stage
+            };
+        }
+
+        return new Lead
+        {
+            Id = Guid.NewGuid(),
+            Email = recipientEmail.Trim(),
+            ProductId = syntheticProductId,
+            Stage = ResolveSyntheticStageForTest(batchType, templateStage)
+        };
+    }
+
+    private static LeadStage ResolveSyntheticStageForTest(CampaignBatchType batchType, string? templateStage)
+    {
+        var parsed = TryParseLeadStageForTest(templateStage);
+        return batchType switch
+        {
+            CampaignBatchType.Day1 => LeadStage.Cold,
+            CampaignBatchType.Day2 => LeadStage.Cold,
+            CampaignBatchType.Day3 => parsed ?? LeadStage.Warm,
+            CampaignBatchType.Day4 when parsed is LeadStage.Mql or LeadStage.Hot => parsed!.Value,
+            CampaignBatchType.Day4 => LeadStage.Mql,
+            _ => LeadStage.Cold
+        };
+    }
+
+    private static LeadStage? TryParseLeadStageForTest(string? templateStage)
+    {
+        if (string.IsNullOrWhiteSpace(templateStage))
+        {
+            return null;
+        }
+
+        return Enum.TryParse<LeadStage>(templateStage.Trim(), true, out var s) ? s : null;
+    }
+
     private string ComposeBatchEmailHtml(EmailTemplate template, Lead lead, CampaignBatchType batchType, bool useTrackedCta)
     {
         var eventName = $"batch_{batchType.ToString().ToLowerInvariant()}";
         var resolvedBody = ResolveTemplate(template.EmailBodyHtml, lead, eventName, template.IsTrackingEnabled);
         if (!string.IsNullOrWhiteSpace(template.CtaButtonText) &&
             !string.IsNullOrWhiteSpace(template.CtaLink) &&
-            !ContainsInlineCta(resolvedBody))
+            !EmailBodyCtaPolicy.ShouldSuppressAppendedCta(resolvedBody))
         {
             var resolvedLink = ResolveTemplate(template.CtaLink, lead, eventName, template.IsTrackingEnabled);
             var href = useTrackedCta ? BuildTrackedClickUrl(lead, resolvedLink) : resolvedLink;
@@ -718,18 +884,7 @@ public class BatchProcessingService(
                 """;
         }
 
-        return resolvedBody;
-    }
-
-    private static bool ContainsInlineCta(string htmlBody)
-    {
-        if (string.IsNullOrWhiteSpace(htmlBody))
-        {
-            return false;
-        }
-
-        return htmlBody.Contains("<a ", StringComparison.OrdinalIgnoreCase) ||
-               htmlBody.Contains("class=\"cta-button\"", StringComparison.OrdinalIgnoreCase);
+        return OutboundEmailRecipientLinkRewrite.ApplyRecipientEmailToHiperbrainsLinks(resolvedBody, lead.Email);
     }
 
     private async Task<CampaignBatchType> GetNextBatchTypeAsync(CancellationToken cancellationToken)

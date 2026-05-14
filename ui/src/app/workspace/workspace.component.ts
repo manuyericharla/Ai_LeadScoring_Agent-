@@ -121,6 +121,15 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
   manualLoading = false;
   manualError = '';
 
+  /** One address per line or comma-/semicolon-separated (test send only). */
+  testEmailRecipientsRaw = '';
+  /** Optional numeric product template scope when recipients are not in CRM. */
+  testEmailProductIdRaw = '';
+  testEmailTemplateStage: '' | StageName = '';
+  testEmailSending = false;
+  testEmailError = '';
+  testEmailLastResult?: TestMarketingEmailResult;
+
   /** Selected lead bucket for Manual Batch. Changing scope resets leads-to-process to the full bucket size. */
   get manualScope(): ManualScope {
     return this._manualScope;
@@ -176,6 +185,31 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
       this.manualSelectedBucketCount > 0 &&
       this.manualLeadTakeCount >= 1
     );
+  }
+
+  get parsedTestRecipients(): string[] {
+    const raw = this.testEmailRecipientsRaw.trim();
+    if (!raw) {
+      return [];
+    }
+
+    const pieces = raw
+      .split(/[\s,;]+/)
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0 && x.includes('@') && x.length <= 254);
+    const dedup = new Map<string, string>();
+    for (const e of pieces) {
+      const k = e.toLowerCase();
+      if (!dedup.has(k)) {
+        dedup.set(k, e);
+      }
+    }
+
+    return [...dedup.values()].sort((a, b) => a.localeCompare(b));
+  }
+
+  get canSendTestEmails(): boolean {
+    return this.parsedTestRecipients.length > 0 && !this.testEmailSending && !this.manualLoading;
   }
 
   /** Unique company names from saved configs (datalist suggestions). */
@@ -1054,6 +1088,21 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
     return String(batchType ?? '');
   }
 
+  /** Manual batch dropdown → API numeric `CampaignBatchType`. */
+  private manualBatchEnumCode(): number {
+    switch (this.manualBatchType) {
+      case 'Day2':
+        return 2;
+      case 'Day3':
+        return 3;
+      case 'Day4':
+        return 4;
+      case 'Day1':
+      default:
+        return 1;
+    }
+  }
+
   manualScopeLabel(scope: unknown): string {
     const key = String(scope ?? '');
     const map: Record<string, string> = {
@@ -1118,6 +1167,51 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.manualError = 'Could not start this send. Verify the API or try again.';
+        }
+      });
+  }
+
+  sendTestEmails(): void {
+    this.testEmailError = '';
+    const list = this.parsedTestRecipients;
+    if (list.length === 0) {
+      this.testEmailError = 'Enter at least one email address.';
+      return;
+    }
+
+    let productId: number | undefined;
+    const rawPid = String(this.testEmailProductIdRaw ?? '').trim();
+    if (rawPid !== '') {
+      const n = Number.parseInt(rawPid, 10);
+      if (!Number.isNaN(n) && n > 0) {
+        productId = n;
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      recipients: list,
+      batchType: this.manualBatchEnumCode(),
+      templateStage: this.testEmailTemplateStage ? this.testEmailTemplateStage : null
+    };
+    if (productId !== undefined) {
+      body['productId'] = productId;
+    }
+
+    this.testEmailSending = true;
+    this.testEmailLastResult = undefined;
+    this.http
+      .post<TestMarketingEmailResult>(`${this.apiBase}/api/batch/test-email`, body)
+      .pipe(finalize(() => (this.testEmailSending = false)))
+      .subscribe({
+        next: (res) => {
+          this.testEmailLastResult = res;
+        },
+        error: (err: { error?: { message?: string } }) => {
+          const msg =
+            typeof err?.error?.message === 'string' && err.error.message.trim()
+              ? err.error.message
+              : 'Test send failed. Check network and API availability.';
+          this.testEmailError = msg;
         }
       });
   }
@@ -1347,6 +1441,13 @@ interface BatchFailureInfo {
   leadId: string;
   email: string;
   reason: string;
+}
+
+interface TestMarketingEmailResult {
+  attempted: number;
+  successCount: number;
+  failureCount: number;
+  failures: BatchFailureInfo[];
 }
 
 interface BatchManualRunResult {
