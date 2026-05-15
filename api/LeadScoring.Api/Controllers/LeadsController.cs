@@ -123,6 +123,8 @@ public class LeadsController(
         return Ok(new LeadIdentifyResponse(
             LeadId: result.Lead.Id,
             Email: result.Lead.Email,
+            FirstName: string.IsNullOrWhiteSpace(result.Lead.FirstName) ? "" : result.Lead.FirstName.Trim(),
+            LastName: string.IsNullOrWhiteSpace(result.Lead.LastName) ? "" : result.Lead.LastName.Trim(),
             LeadCreated: result.LeadCreated,
             VisitorMapped: result.VisitorMapped));
     }

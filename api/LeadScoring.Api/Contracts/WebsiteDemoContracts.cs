@@ -37,5 +37,7 @@ public record LeadIdentifyRequest(
 public record LeadIdentifyResponse(
     Guid LeadId,
     string Email,
+    string FirstName,
+    string LastName,
     bool LeadCreated,
     bool VisitorMapped);
