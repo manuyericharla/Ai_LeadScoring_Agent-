@@ -121,15 +121,6 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
   manualLoading = false;
   manualError = '';
 
-  /** One address per line or comma-/semicolon-separated (test send only). */
-  testEmailRecipientsRaw = '';
-  /** Optional numeric product template scope when recipients are not in CRM. */
-  testEmailProductIdRaw = '';
-  testEmailTemplateStage: '' | StageName = '';
-  testEmailSending = false;
-  testEmailError = '';
-  testEmailLastResult?: TestMarketingEmailResult;
-
   /** Selected lead bucket for Manual Batch. Changing scope resets leads-to-process to the full bucket size. */
   get manualScope(): ManualScope {
     return this._manualScope;
@@ -185,31 +176,6 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
       this.manualSelectedBucketCount > 0 &&
       this.manualLeadTakeCount >= 1
     );
-  }
-
-  get parsedTestRecipients(): string[] {
-    const raw = this.testEmailRecipientsRaw.trim();
-    if (!raw) {
-      return [];
-    }
-
-    const pieces = raw
-      .split(/[\s,;]+/)
-      .map((x) => x.trim())
-      .filter((x) => x.length > 0 && x.includes('@') && x.length <= 254);
-    const dedup = new Map<string, string>();
-    for (const e of pieces) {
-      const k = e.toLowerCase();
-      if (!dedup.has(k)) {
-        dedup.set(k, e);
-      }
-    }
-
-    return [...dedup.values()].sort((a, b) => a.localeCompare(b));
-  }
-
-  get canSendTestEmails(): boolean {
-    return this.parsedTestRecipients.length > 0 && !this.testEmailSending && !this.manualLoading;
   }
 
   /** Unique company names from saved configs (datalist suggestions). */
@@ -658,6 +624,136 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
 
   onPageSizeChange(): void {
     this.currentPage = 1;
+  }
+
+  private static readonly leadsExportColumns = [
+    'Email',
+    'Score',
+    'Stage',
+    'Last activity',
+    'Last event',
+    'Source',
+    'Campaign',
+    'Next date',
+    'Last email',
+    'Next email',
+    'Next stage',
+    'Signup',
+    'Profile',
+    'Plan'
+  ] as const;
+
+  leadsExportFilterSummary(): string {
+    const parts: string[] = [];
+    const sf = this.leadsSourceFilter.trim();
+    if (sf) {
+      parts.push(`Source: ${this.sourceFilterOptionLabel(sf)}`);
+    }
+    const cf = this.leadsCampaignFilter.trim();
+    if (cf) {
+      const label =
+        cf === this.leadsCampaignNoneSentinel ? 'None' : cf;
+      parts.push(`Campaign: ${label}`);
+    }
+    if (this.leadsStageFilter) {
+      parts.push(`Stage: ${this.leadsStageFilter === 'Mql' ? 'MQL' : this.leadsStageFilter}`);
+    }
+    if (this.leadsSignupFilter === 'signed-up') {
+      parts.push('Signup: Signed up');
+    } else if (this.leadsSignupFilter === 'not-signed-up') {
+      parts.push('Signup: Not signed up');
+    }
+    return parts.length ? parts.join(' · ') : 'No filters (all leads)';
+  }
+
+  private leadsExportFilenameSlug(): string {
+    if (this.leadsStageFilter) {
+      return this.leadsStageFilter.toLowerCase();
+    }
+    return 'all-stages';
+  }
+
+  private formatLeadExportDate(iso: string | null | undefined): string {
+    if (!iso) {
+      return '—';
+    }
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+  }
+
+  private leadRowCellsForExport(lead: DashboardLead): string[] {
+    return [
+      lead.email,
+      String(lead.score),
+      lead.stage,
+      this.formatLeadExportDate(lead.lastActivityUtc),
+      lead.lastEvent?.trim() ? lead.lastEvent : '—',
+      lead.lastEventSource?.trim() ? lead.lastEventSource : '—',
+      lead.lastEventCampaign?.trim() ? lead.lastEventCampaign : '—',
+      lead.nextDateTimeUtc ? this.formatLeadExportDate(lead.nextDateTimeUtc) : '—',
+      lead.lastEmailName?.trim() ? lead.lastEmailName : '—',
+      lead.nextEmailName?.trim() ? lead.nextEmailName : '—',
+      lead.nextStage,
+      lead.signupCompleted ? 'Yes' : 'No',
+      lead.profileCompletion ? 'Yes' : 'No',
+      lead.profileCompletion && lead.selectedPlan?.trim() ? lead.selectedPlan : '—'
+    ];
+  }
+
+  downloadLeadsFilteredPdf(): void {
+    const rows = this.leadsMatchingTableFilters;
+    if (!this.data || rows.length === 0) {
+      this.error = 'No leads match the current filters.';
+      return;
+    }
+
+    this.error = '';
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const generatedAt = new Date();
+    doc.setFontSize(16);
+    doc.text('Leads report', 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${generatedAt.toLocaleString()}`, 40, 58);
+    const summary = this.leadsExportFilterSummary();
+    doc.text(`Filters: ${summary}`, 40, 74);
+    doc.text(`Rows: ${rows.length}`, 40, 90);
+
+    const body = rows.map((lead) => this.leadRowCellsForExport(lead));
+    autoTable(doc, {
+      startY: 102,
+      head: [Array.from(WorkspaceComponent.leadsExportColumns)],
+      body,
+      styles: {
+        fontSize: 7,
+        cellPadding: 4
+      },
+      headStyles: {
+        fillColor: [173, 216, 230],
+        textColor: [17, 24, 39],
+        fontStyle: 'bold'
+      },
+      didParseCell: (hookData) => {
+        if (hookData.section !== 'body') {
+          return;
+        }
+        const col = hookData.column.index;
+        if (col === 2 || col === 10) {
+          const stage = String(hookData.cell.raw);
+          if (stage === 'Cold') {
+            hookData.cell.styles.textColor = [30, 64, 175];
+          } else if (stage === 'Warm') {
+            hookData.cell.styles.textColor = [180, 83, 9];
+          } else if (stage === 'Mql') {
+            hookData.cell.styles.textColor = [3, 105, 161];
+          } else if (stage === 'Hot') {
+            hookData.cell.styles.textColor = [185, 28, 28];
+          }
+        }
+      }
+    });
+
+    const filename = `leads-report-${this.leadsExportFilenameSlug()}-${generatedAt.toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
   }
 
   downloadPdfReport(): void {
@@ -1171,51 +1267,6 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
       });
   }
 
-  sendTestEmails(): void {
-    this.testEmailError = '';
-    const list = this.parsedTestRecipients;
-    if (list.length === 0) {
-      this.testEmailError = 'Enter at least one email address.';
-      return;
-    }
-
-    let productId: number | undefined;
-    const rawPid = String(this.testEmailProductIdRaw ?? '').trim();
-    if (rawPid !== '') {
-      const n = Number.parseInt(rawPid, 10);
-      if (!Number.isNaN(n) && n > 0) {
-        productId = n;
-      }
-    }
-
-    const body: Record<string, unknown> = {
-      recipients: list,
-      batchType: this.manualBatchEnumCode(),
-      templateStage: this.testEmailTemplateStage ? this.testEmailTemplateStage : null
-    };
-    if (productId !== undefined) {
-      body['productId'] = productId;
-    }
-
-    this.testEmailSending = true;
-    this.testEmailLastResult = undefined;
-    this.http
-      .post<TestMarketingEmailResult>(`${this.apiBase}/api/batch/test-email`, body)
-      .pipe(finalize(() => (this.testEmailSending = false)))
-      .subscribe({
-        next: (res) => {
-          this.testEmailLastResult = res;
-        },
-        error: (err: { error?: { message?: string } }) => {
-          const msg =
-            typeof err?.error?.message === 'string' && err.error.message.trim()
-              ? err.error.message
-              : 'Test send failed. Check network and API availability.';
-          this.testEmailError = msg;
-        }
-      });
-  }
-
   private startManualRunPolling(jobId: string): void {
     this.stopManualRunPolling();
 
@@ -1441,13 +1492,6 @@ interface BatchFailureInfo {
   leadId: string;
   email: string;
   reason: string;
-}
-
-interface TestMarketingEmailResult {
-  attempted: number;
-  successCount: number;
-  failureCount: number;
-  failures: BatchFailureInfo[];
 }
 
 interface BatchManualRunResult {
