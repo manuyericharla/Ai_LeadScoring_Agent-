@@ -3,8 +3,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LeadScoring.Api.Data;
 
-public class LeadScoringDbContext(DbContextOptions<LeadScoringDbContext> options) : DbContext(options)
+public class LeadScoringDbContext : DbContext
 {
+    private readonly string? _tenantSchema;
+
+    public LeadScoringDbContext(DbContextOptions<LeadScoringDbContext> options, string? tenantSchema = null)
+        : base(options)
+    {
+        _tenantSchema = tenantSchema;
+    }
+
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<LeadEvent> Events => Set<LeadEvent>();
     public DbSet<CompanyProductConfig> CompanyProductConfigs => Set<CompanyProductConfig>();
@@ -19,6 +27,15 @@ public class LeadScoringDbContext(DbContextOptions<LeadScoringDbContext> options
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        if (!string.IsNullOrWhiteSpace(_tenantSchema))
+        {
+            modelBuilder.HasDefaultSchema(_tenantSchema);
+        }
+        else
+        {
+            modelBuilder.HasDefaultSchema("public");
+        }
+
         modelBuilder.Entity<Lead>().HasIndex(x => x.Email).IsUnique();
         modelBuilder.Entity<Lead>().HasIndex(x => x.VisitorId);
         modelBuilder.Entity<Lead>().HasIndex(x => new { x.Stage, x.CreatedAtUtc });

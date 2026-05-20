@@ -25,7 +25,7 @@ import { SidebarComponent } from './workspace/sidebar/sidebar.component';
         <div class="drawer-backdrop" (click)="drawerOpen = false" aria-hidden="true"></div>
         <app-sidebar [drawerOpen]="drawerOpen" (drawerClose)="drawerOpen = false" />
       }
-      <main class="app-main">
+      <main class="app-main" [class.app-main--fullscreen]="!showShell">
         <router-outlet />
       </main>
     </div>
@@ -57,7 +57,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private applyShellForUrl(fullUrl: string): void {
     const pathOnly = fullUrl.split('?')[0].split('#')[0];
-    this.showShell = pathOnly !== '/email';
+    this.showShell =
+      pathOnly !== '/email' && pathOnly !== '/login' && pathOnly !== '/signup';
   }
   private ensureEmailGateRoute(fullUrl: string): void {
     const [pathOnly, queryRaw] = fullUrl.split('?');

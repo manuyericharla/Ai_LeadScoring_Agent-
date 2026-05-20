@@ -77,6 +77,17 @@ a {
   max-width: none;
 }
 
+/* Auth, email gate, etc. — full-bleed, no shell padding or page background */
+.app-main--fullscreen {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  background: transparent;
+  overflow: hidden;
+}
+
 .mobile-top-bar {
   display: none;
   align-items: center;
@@ -170,7 +181,11 @@ a {
     width: 100%;
   }
 
-  .app-frame--no-sidebar .app-main {
+  .app-frame--no-sidebar .app-main:not(.app-main--fullscreen) {
     padding-top: var(--space-8);
+  }
+
+  .app-main--fullscreen {
+    padding-top: 0;
   }
 }

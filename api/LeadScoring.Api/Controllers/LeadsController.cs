@@ -2,6 +2,7 @@ using LeadScoring.Api;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,24 +10,32 @@ namespace LeadScoring.Api.Controllers;
 
 [ApiController]
 [Route("api/leads")]
+[Authorize]
 public class LeadsController(
     LeadScoringDbContext db,
+    ICompanyLeadDbAccessor companyLeadDb,
     LeadImportService leadImportService,
-    VisitorAttributionService visitorAttributionService) : ControllerBase
+    VisitorAttributionService visitorAttributionService,
+    ITenantContext tenantContext,
+    ITenantLeadScope tenantLeadScope) : ControllerBase
 {
     [HttpGet("{leadId:guid}/events")]
-    public async Task<ActionResult<LeadEventsResponse>> GetLeadEvents(Guid leadId)
+    public async Task<ActionResult<LeadEventsResponse>> GetLeadEvents(Guid leadId, CancellationToken cancellationToken)
     {
-        var lead = await db.Leads
+        tenantContext.RequireTenant();
+        await tenantLeadScope.EnsureTenantContextMatchesUserAsync(cancellationToken);
+        var companyName = await tenantLeadScope.ResolveCompanyNameAsync(cancellationToken);
+        var companyDb = companyLeadDb.GetDbContext();
+        var lead = await tenantLeadScope.ApplyScope(companyDb.Leads, companyName)
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == leadId);
+            .FirstOrDefaultAsync(x => x.Id == leadId, cancellationToken);
 
         if (lead is null)
         {
             return NotFound(new { message = "Lead not found." });
         }
 
-        var raw = await db.Events
+        var raw = await companyDb.Events
             .AsNoTracking()
             .Where(e => e.LeadId == leadId)
             .OrderBy(e => e.TimestampUtc)
@@ -40,7 +49,7 @@ public class LeadsController(
                 e.Campaign,
                 e.MetadataJson
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var events = raw
             .Select(e => new LeadEventDetailDto(
@@ -64,6 +73,7 @@ public class LeadsController(
     }
 
     [HttpPost("email-exists")]
+    [AllowAnonymous]
     public async Task<ActionResult<LeadEmailExistsResponse>> CheckEmailExists([FromBody] LeadEmailExistsRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email))
@@ -83,6 +93,7 @@ public class LeadsController(
     }
 
     [HttpPost("website-demo/submit")]
+    [AllowAnonymous]
     public async Task<ActionResult<WebsiteDemoSubmitResponse>> SubmitWebsiteDemo([FromBody] WebsiteDemoSubmitRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.VisitorId))
@@ -106,6 +117,7 @@ public class LeadsController(
     }
 
     [HttpPost("identify")]
+    [AllowAnonymous]
     public async Task<ActionResult<LeadIdentifyResponse>> Identify([FromBody] LeadIdentifyRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.VisitorId))
@@ -133,6 +145,7 @@ public class LeadsController(
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> ImportFile([FromForm] ImportLeadsRequest request)
     {
+        tenantContext.RequireTenant();
         var file = request.File;
         if (file is null)
         {
@@ -159,6 +172,7 @@ public class LeadsController(
     [HttpPost("import-json")]
     public async Task<IActionResult> ImportJson([FromBody] LeadImportPayload payload)
     {
+        tenantContext.RequireTenant();
         if (payload.Leads.Count == 0)
         {
             return BadRequest("No leads provided.");
