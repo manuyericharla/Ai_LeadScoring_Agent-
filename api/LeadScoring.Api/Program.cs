@@ -1,6 +1,7 @@
 using System.Text;
 using LeadScoring.Api.Background;
 using LeadScoring.Api.Data;
+using LeadScoring.Api.Middleware;
 using LeadScoring.Api.Repositories;
 using LeadScoring.Api.Services;
 using System.Net;
@@ -29,6 +30,7 @@ builder.Services.AddDbContext<MasterDbContext>(opt =>
         warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
 });
 
+builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<ITenantDbContextAccessor, TenantDbContextAccessor>();
 builder.Services.AddScoped<LeadScoringDbContext>(sp =>
     sp.GetRequiredService<ITenantDbContextAccessor>().GetDbContext());
@@ -46,6 +48,7 @@ var jwtAudience = builder.Configuration["Auth:JwtAudience"] ?? "LeadScoring.App"
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -55,7 +58,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
-            ClockSkew = TimeSpan.FromMinutes(2)
+            ClockSkew = TimeSpan.FromMinutes(2),
+            NameClaimType = "sub",
+            RoleClaimType = "role"
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = ctx =>
+            {
+                if (!string.IsNullOrEmpty(ctx.Request.Headers.Origin))
+                {
+                    ctx.Response.Headers.AccessControlAllowOrigin = ctx.Request.Headers.Origin!;
+                    ctx.Response.Headers.AccessControlAllowCredentials = "true";
+                }
+
+                ctx.HandleResponse();
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                ctx.Response.ContentType = "application/json";
+                return ctx.Response.WriteAsJsonAsync(new { message = "Unauthorized. Sign in again." });
+            }
         };
     });
 builder.Services.AddAuthorization();
@@ -138,6 +159,25 @@ using (var scope = app.Services.CreateScope())
 {
     var masterDb = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
     await masterDb.Database.MigrateAsync();
+
+    var provisioner = scope.ServiceProvider.GetRequiredService<ITenantDatabaseProvisioner>();
+    var tenantSchemas = await masterDb.Tenants
+        .AsNoTracking()
+        .Select(t => t.DatabaseName)
+        .Distinct()
+        .ToListAsync();
+
+    foreach (var schema in tenantSchemas)
+    {
+        try
+        {
+            await provisioner.EnsureReadyAsync(schema);
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogError(ex, "Could not ensure tenant schema {Schema} on startup.", schema);
+        }
+    }
 }
 
 app.UseForwardedHeaders();
@@ -147,10 +187,32 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseExceptionHandler(errApp =>
+{
+    errApp.Run(async ctx =>
+    {
+        var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        if (ex is UnauthorizedAccessException uae)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await ctx.Response.WriteAsJsonAsync(new { message = uae.Message });
+            return;
+        }
+
+        ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await ctx.Response.WriteAsJsonAsync(new
+        {
+            message = "An unexpected error occurred.",
+            detail = app.Environment.IsDevelopment() ? ex?.Message : null
+        });
+    });
+});
+
 app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<TenantSchemaEnsureMiddleware>();
 
 var configuredEmailImagesPath = app.Configuration["PublicAssets:EmailImagesPhysicalPath"];
 var emailImagesSourcePath = ResolveEmailImagesSourcePath(configuredEmailImagesPath, app.Environment.ContentRootPath);

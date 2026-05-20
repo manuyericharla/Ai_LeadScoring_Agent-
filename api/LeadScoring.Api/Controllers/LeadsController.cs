@@ -14,11 +14,13 @@ namespace LeadScoring.Api.Controllers;
 public class LeadsController(
     LeadScoringDbContext db,
     LeadImportService leadImportService,
-    VisitorAttributionService visitorAttributionService) : ControllerBase
+    VisitorAttributionService visitorAttributionService,
+    ITenantContext tenantContext) : ControllerBase
 {
     [HttpGet("{leadId:guid}/events")]
     public async Task<ActionResult<LeadEventsResponse>> GetLeadEvents(Guid leadId)
     {
+        tenantContext.RequireTenant();
         var lead = await db.Leads
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == leadId);
@@ -138,6 +140,7 @@ public class LeadsController(
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> ImportFile([FromForm] ImportLeadsRequest request)
     {
+        tenantContext.RequireTenant();
         var file = request.File;
         if (file is null)
         {
@@ -164,6 +167,7 @@ public class LeadsController(
     [HttpPost("import-json")]
     public async Task<IActionResult> ImportJson([FromBody] LeadImportPayload payload)
     {
+        tenantContext.RequireTenant();
         if (payload.Leads.Count == 0)
         {
             return BadRequest("No leads provided.");

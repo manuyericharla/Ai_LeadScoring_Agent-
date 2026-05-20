@@ -2,6 +2,7 @@ using LeadScoring.Api;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Models;
+using LeadScoring.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,11 +12,12 @@ namespace LeadScoring.Api.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 [Authorize]
-public class DashboardController(LeadScoringDbContext db) : ControllerBase
+public class DashboardController(LeadScoringDbContext db, ITenantContext tenantContext) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Get()
     {
+        tenantContext.RequireTenant();
         const int nextEmailDelayHours = 24;
 
         var leads = await (
@@ -116,6 +118,7 @@ public class DashboardController(LeadScoringDbContext db) : ControllerBase
 
         return Ok(new
         {
+            companyName = tenantContext.CompanyName,
             totalLeads = leads.Count,
             signedUpCount,
             stageCounts,

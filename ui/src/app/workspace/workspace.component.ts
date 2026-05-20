@@ -1,6 +1,6 @@
 import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { DecimalPipe, DatePipe, NgFor, NgIf } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { filter, finalize } from 'rxjs';
@@ -427,9 +427,9 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
         this.currentPage = 1;
         this.loading = false;
       },
-      error: () => {
+      error: (err: unknown) => {
         this.loading = false;
-        this.error = `Failed to load dashboard from ${this.apiBase}. Check API URL and CORS.`;
+        this.error = this.formatApiError(err, `Failed to load dashboard from ${this.apiBase}.`);
       }
     });
   }
@@ -1085,6 +1085,27 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
       return window.location.origin;
     }
     return '';
+  }
+
+  private formatApiError(err: unknown, fallback: string): string {
+    if (err instanceof HttpErrorResponse) {
+      if (err.status === 0) {
+        return `${fallback} Cannot reach the API at ${this.apiBase}. Start the backend and check CORS.`;
+      }
+      const body = err.error as { message?: string; detail?: string } | null;
+      const msg = body?.message ?? body?.detail;
+      if (msg) {
+        return msg;
+      }
+      if (err.status === 401) {
+        return 'Session expired. Please sign in again.';
+      }
+      if (err.status === 403) {
+        return 'Access denied for your company account. Sign in again.';
+      }
+      return `${fallback} (HTTP ${err.status})`;
+    }
+    return fallback;
   }
 
   private resolveApiBase(): string {

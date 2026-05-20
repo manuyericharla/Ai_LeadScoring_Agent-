@@ -9,11 +9,15 @@ namespace LeadScoring.Api.Controllers;
 [ApiController]
 [Route("api/batch")]
 [Authorize]
-public class BatchController(IBatchProcessingService batchProcessingService, ILogger<BatchController> logger) : ControllerBase
+public class BatchController(
+    IBatchProcessingService batchProcessingService,
+    ITenantContext tenantContext,
+    ILogger<BatchController> logger) : ControllerBase
 {
     [HttpGet("history")]
     public async Task<IActionResult> History([FromQuery] int take = 200, CancellationToken cancellationToken = default)
     {
+        tenantContext.RequireTenant();
         take = Math.Clamp(take, 1, 500);
         var rows = await batchProcessingService.GetBatchLogHistoryAsync(take, cancellationToken);
         return Ok(rows);
@@ -22,6 +26,7 @@ public class BatchController(IBatchProcessingService batchProcessingService, ILo
     [HttpGet("preview")]
     public async Task<IActionResult> Preview([FromQuery] CampaignBatchType batchType, CancellationToken cancellationToken)
     {
+        tenantContext.RequireTenant();
         var result = await batchProcessingService.PreviewAsync(batchType, cancellationToken);
         return Ok(result);
     }
@@ -29,6 +34,7 @@ public class BatchController(IBatchProcessingService batchProcessingService, ILo
     [HttpPost("run-manual")]
     public async Task<IActionResult> RunManual([FromQuery] CampaignBatchType batchType, [FromBody] BatchManualRunRequestDto? request, CancellationToken cancellationToken)
     {
+        tenantContext.RequireTenant();
         try
         {
             var result = await batchProcessingService.RunManualAsync(batchType, request?.Scope, request?.MaxLeads, cancellationToken);

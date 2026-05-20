@@ -2,6 +2,7 @@ using System.Text.Json;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Models;
+using LeadScoring.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,11 +12,14 @@ namespace LeadScoring.Api.Controllers;
 [ApiController]
 [Route("api/company-product-configs")]
 [Authorize]
-public class CompanyProductConfigsController(LeadScoringDbContext db) : ControllerBase
+public class CompanyProductConfigsController(LeadScoringDbContext db, ITenantContext tenantContext) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] UpsertCompanyProductConfigRequest request)
     {
+        tenantContext.RequireTenant();
+        request.CompanyName = tenantContext.CompanyName!;
+
         if (!TryNormalizeRequest(request, out var normalizedItems, out var errorMessage))
         {
             return BadRequest(errorMessage);
@@ -26,7 +30,7 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
         var entity = new CompanyProductConfig
         {
             Id = Guid.NewGuid(),
-            CompanyName = request.CompanyName.Trim(),
+            CompanyName = tenantContext.CompanyName!.Trim(),
             ProductName = request.ProductName.Trim(),
             ProductId = nextProductId,
             ProductEventConfigJson = configJson,
@@ -57,18 +61,21 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpsertCompanyProductConfigRequest request)
     {
+        tenantContext.RequireTenant();
+        request.CompanyName = tenantContext.CompanyName!;
+
         if (!TryNormalizeRequest(request, out var normalizedItems, out var errorMessage))
         {
             return BadRequest(errorMessage);
         }
 
         var entity = await db.CompanyProductConfigs.FirstOrDefaultAsync(x => x.Id == id);
-        if (entity is null)
+        if (entity is null || !BelongsToTenant(entity))
         {
             return NotFound("Company product config not found.");
         }
 
-        entity.CompanyName = request.CompanyName.Trim();
+        entity.CompanyName = tenantContext.CompanyName!.Trim();
         entity.ProductName = request.ProductName.Trim();
         entity.ProductEventConfigJson = JsonSerializer.Serialize(normalizedItems);
 
@@ -95,7 +102,10 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? companyName = null)
     {
-        var query = db.CompanyProductConfigs.AsNoTracking();
+        tenantContext.RequireTenant();
+        var tenantCompany = tenantContext.CompanyName!;
+        var query = db.CompanyProductConfigs.AsNoTracking()
+            .Where(x => x.CompanyName == tenantCompany);
 
         if (!string.IsNullOrWhiteSpace(companyName))
         {
@@ -128,10 +138,14 @@ public class CompanyProductConfigsController(LeadScoringDbContext db) : Controll
     [HttpPost("{id:guid}/delete")]
     public Task<IActionResult> DeletePost(Guid id) => DeleteImplAsync(id);
 
+    private bool BelongsToTenant(CompanyProductConfig entity) =>
+        string.Equals(entity.CompanyName, tenantContext.CompanyName, StringComparison.OrdinalIgnoreCase);
+
     private async Task<IActionResult> DeleteImplAsync(Guid id)
     {
+        tenantContext.RequireTenant();
         var entity = await db.CompanyProductConfigs.FirstOrDefaultAsync(x => x.Id == id);
-        if (entity is null)
+        if (entity is null || !BelongsToTenant(entity))
         {
             return NotFound("Company product config not found.");
         }

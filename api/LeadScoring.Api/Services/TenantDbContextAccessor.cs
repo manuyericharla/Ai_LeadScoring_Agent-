@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace LeadScoring.Api.Services;
 
 public class TenantDbContextAccessor(
-    IHttpContextAccessor httpContextAccessor,
+    ITenantContext tenantContext,
     IConfiguration configuration) : ITenantDbContextAccessor
 {
     public LeadScoringDbContext GetDbContext()
@@ -12,21 +12,26 @@ public class TenantDbContextAccessor(
         var masterConnection = configuration.GetConnectionString("Hiperbrains")
             ?? throw new InvalidOperationException("Connection string 'Hiperbrains' is missing.");
 
-        var tenantSchema = httpContextAccessor.HttpContext?.User.FindFirst("tenant_db")?.Value;
-        if (!string.IsNullOrWhiteSpace(tenantSchema))
+        if (tenantContext.IsAuthenticated)
         {
+            tenantContext.RequireTenant();
+            var schema = tenantContext.SchemaName!;
+
             var tenantOptions = new DbContextOptionsBuilder<LeadScoringDbContext>()
                 .UseNpgsql(masterConnection, npg =>
-                    npg.MigrationsHistoryTable("__EFMigrationsHistory", tenantSchema))
+                    npg.MigrationsHistoryTable("__EFMigrationsHistory", schema))
+                .AddInterceptors(new TenantSchemaConnectionInterceptor(schema))
                 .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
                 .Options;
-            return new LeadScoringDbContext(tenantOptions, tenantSchema);
+
+            return new LeadScoringDbContext(tenantOptions, schema);
         }
 
         var defaultOptions = new DbContextOptionsBuilder<LeadScoringDbContext>()
             .UseNpgsql(masterConnection)
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
             .Options;
+
         return new LeadScoringDbContext(defaultOptions);
     }
 }

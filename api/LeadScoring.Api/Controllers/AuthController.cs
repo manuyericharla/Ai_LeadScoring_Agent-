@@ -50,7 +50,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     [Authorize]
     public async Task<ActionResult<AuthUserDto>> Me(CancellationToken cancellationToken)
     {
-        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(sub, out var userId))
         {
             return Unauthorized();
