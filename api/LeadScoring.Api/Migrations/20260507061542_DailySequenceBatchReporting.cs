@@ -12,6 +12,19 @@ namespace LeadScoring.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<bool>(
+                name: "WelcomeEmailSent",
+                table: "Leads",
+                type: "boolean",
+                nullable: false,
+                defaultValue: false);
+
+            migrationBuilder.AddColumn<int>(
+                name: "ProductId",
+                table: "Leads",
+                type: "integer",
+                nullable: true);
+
             migrationBuilder.AddColumn<DateTime>(
                 name: "LastEmailSentDateUtc",
                 table: "Leads",
@@ -122,6 +135,14 @@ namespace LeadScoring.Api.Migrations
 
             migrationBuilder.DropColumn(
                 name: "NextEmailSendDateUtc",
+                table: "Leads");
+
+            migrationBuilder.DropColumn(
+                name: "ProductId",
+                table: "Leads");
+
+            migrationBuilder.DropColumn(
+                name: "WelcomeEmailSent",
                 table: "Leads");
         }
     }

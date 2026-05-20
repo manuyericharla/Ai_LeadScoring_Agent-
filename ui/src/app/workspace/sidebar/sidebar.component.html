@@ -103,4 +103,13 @@
       <span class="nav-label">Tracking Links</span>
     </a>
   </nav>
+
+  @if (auth.user(); as user) {
+    <div class="account">
+      <p class="account-company">{{ user.companyName }}</p>
+      <p class="account-email">{{ user.email }}</p>
+      <p class="account-plan">{{ user.selectedPlan }} plan</p>
+      <button type="button" class="logout-btn" (click)="logout()">Sign out</button>
+    </div>
+  }
 </aside>

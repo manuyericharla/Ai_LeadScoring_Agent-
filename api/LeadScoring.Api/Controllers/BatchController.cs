@@ -1,12 +1,14 @@
 using LeadScoring.Api.Models;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadScoring.Api.Controllers;
 
 [ApiController]
 [Route("api/batch")]
+[Authorize]
 public class BatchController(IBatchProcessingService batchProcessingService, ILogger<BatchController> logger) : ControllerBase
 {
     [HttpGet("history")]

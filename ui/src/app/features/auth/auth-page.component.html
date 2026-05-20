@@ -1,0 +1,293 @@
+<div class="auth-layout">
+  <aside class="auth-promo" aria-hidden="false">
+    <div class="promo-inner">
+      <div class="promo-brand">
+        <img src="/lsa-logo.png" alt="" width="36" height="36" class="promo-logo" />
+        <span class="promo-name">LeadScoring</span>
+      </div>
+
+      <h2 class="promo-headline">Your lead intelligence,<br />always on.</h2>
+      <p class="promo-desc">
+        Score, stage, and nurture prospects with company-isolated data and automated email campaigns.
+      </p>
+
+      <ul class="promo-features">
+        @for (f of features; track f.title) {
+          <li class="promo-feature">
+            <span class="feature-icon" [attr.data-icon]="f.icon">
+              @switch (f.icon) {
+                @case ('chart') {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" d="M3 20h18M7 16V8m5 8V4m5 12v-6"/></svg>
+                }
+                @case ('mail') {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>
+                }
+                @case ('users') {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+                }
+                @default {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
+                }
+              }
+            </span>
+            <div>
+              <strong>{{ f.title }}</strong>
+              <span>{{ f.desc }}</span>
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+  </aside>
+
+  <main class="auth-form-panel">
+    <div class="form-wrap">
+      <div class="mode-toggle" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          class="mode-btn"
+          [class.active]="mode === 'login'"
+          [attr.aria-selected]="mode === 'login'"
+          (click)="setMode('login')"
+        >
+          Sign In
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="mode-btn"
+          [class.active]="mode === 'signup'"
+          [attr.aria-selected]="mode === 'signup'"
+          (click)="setMode('signup')"
+        >
+          Create Account
+        </button>
+      </div>
+
+      @if (mode === 'login') {
+        <header class="form-header">
+          <h1>Welcome back</h1>
+          <p>Sign in to manage your leads, campaigns, and company workspace.</p>
+        </header>
+
+        <form class="auth-form" (ngSubmit)="submitLogin()" novalidate>
+          <label class="field-label" for="loginEmail">Work Email</label>
+          <div class="field-wrap">
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>
+            </span>
+            <input
+              id="loginEmail"
+              type="email"
+              name="email"
+              class="field-input"
+              placeholder="you@company.com"
+              [(ngModel)]="email"
+              autocomplete="username"
+              [disabled]="submitting"
+            />
+          </div>
+
+          <div class="field-label-row">
+            <label class="field-label" for="loginPassword">Password</label>
+          </div>
+          <div class="field-wrap">
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+            </span>
+            <input
+              id="loginPassword"
+              [type]="showPassword ? 'text' : 'password'"
+              name="password"
+              class="field-input"
+              placeholder="Enter your password"
+              [(ngModel)]="password"
+              autocomplete="current-password"
+              [disabled]="submitting"
+            />
+            <button type="button" class="field-action" (click)="showPassword = !showPassword" [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'">
+              @if (showPassword) {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/></svg>
+              } @else {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              }
+            </button>
+          </div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" [(ngModel)]="rememberMe" name="rememberMe" />
+            <span>Keep me signed in</span>
+          </label>
+
+          @if (error) {
+            <p class="form-error" role="alert">{{ error }}</p>
+          }
+
+          <button type="submit" class="btn-primary" [disabled]="submitting">
+            {{ submitting ? 'Signing in…' : 'Sign In' }}
+          </button>
+        </form>
+      } @else {
+        <nav class="stepper" aria-label="Signup progress">
+          <div class="step" [class.active]="signupStep >= 1" [class.done]="signupStep > 1">
+            <span class="step-num">1</span>
+            <span class="step-label">Your Account</span>
+          </div>
+          <div class="step-line" [class.done]="signupStep > 1"></div>
+          <div class="step" [class.active]="signupStep >= 2" [class.done]="signupStep > 2">
+            <span class="step-num">2</span>
+            <span class="step-label">Company Info</span>
+          </div>
+          <div class="step-line" [class.done]="signupStep > 2"></div>
+          <div class="step" [class.active]="signupStep >= 3">
+            <span class="step-num">3</span>
+            <span class="step-label">Choose Plan</span>
+          </div>
+        </nav>
+
+        <header class="form-header">
+          @if (signupStep === 1) {
+            <h1>Create your account</h1>
+            <p>Start scoring leads for your company. Each account gets its own database.</p>
+          } @else if (signupStep === 2) {
+            <h1>Company details</h1>
+            <p>Tell us your organization name — we'll provision an isolated workspace.</p>
+          } @else {
+            <h1>Choose your plan</h1>
+            <p>Pick the tier that fits your team. You can change this later.</p>
+          }
+        </header>
+
+        @if (signupStep === 1) {
+          <div class="auth-form">
+            <div class="field-row">
+              <div class="field-col">
+                <label class="field-label" for="firstName">First Name</label>
+                <div class="field-wrap">
+                  <span class="field-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 19.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+                  </span>
+                  <input id="firstName" class="field-input" placeholder="Jane" [(ngModel)]="firstName" name="firstName" [disabled]="submitting" />
+                </div>
+              </div>
+              <div class="field-col">
+                <label class="field-label" for="lastName">Last Name</label>
+                <div class="field-wrap">
+                  <span class="field-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 19.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+                  </span>
+                  <input id="lastName" class="field-input" placeholder="Doe" [(ngModel)]="lastName" name="lastName" [disabled]="submitting" />
+                </div>
+              </div>
+            </div>
+
+            <label class="field-label" for="signupEmail">Work Email</label>
+            <div class="field-wrap">
+              <span class="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>
+              </span>
+              <input id="signupEmail" type="email" class="field-input" placeholder="you@company.com" [(ngModel)]="email" name="signupEmail" autocomplete="email" [disabled]="submitting" />
+            </div>
+
+            <label class="field-label" for="signupPassword">Password</label>
+            <div class="field-wrap">
+              <span class="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+              </span>
+              <input
+                id="signupPassword"
+                [type]="showPassword ? 'text' : 'password'"
+                class="field-input"
+                placeholder="Create a password"
+                [(ngModel)]="password"
+                name="signupPassword"
+                autocomplete="new-password"
+                [disabled]="submitting"
+              />
+              <button type="button" class="field-action" (click)="showPassword = !showPassword" tabindex="-1" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              </button>
+            </div>
+            @if (password) {
+              <div class="strength" aria-live="polite">
+                <div class="strength-bars">
+                  @for (i of [1, 2, 3, 4]; track i) {
+                    <span class="strength-seg" [class.filled]="passwordStrength >= i"></span>
+                  }
+                </div>
+                <span class="strength-label">{{ passwordStrengthLabel }}</span>
+              </div>
+            }
+
+            <label class="field-label" for="confirmPassword">Confirm Password</label>
+            <div class="field-wrap">
+              <span class="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+              </span>
+              <input
+                id="confirmPassword"
+                [type]="showConfirmPassword ? 'text' : 'password'"
+                class="field-input"
+                placeholder="Re-enter password"
+                [(ngModel)]="confirmPassword"
+                name="confirmPassword"
+                autocomplete="new-password"
+                [disabled]="submitting"
+              />
+              <button type="button" class="field-action" (click)="showConfirmPassword = !showConfirmPassword" tabindex="-1" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              </button>
+            </div>
+          </div>
+        } @else if (signupStep === 2) {
+          <div class="auth-form">
+            <label class="field-label" for="company">Company Name</label>
+            <div class="field-wrap">
+              <span class="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5M2.25 9l4.5-1.636M18.75 3l-1.5.545m0 6.205l3 1m1.5.5l-1.5-.5M6.75 7.364V3h-3v18m3-13.636l1.5-.545m9 6.205v3.409M6.75 7.364l3-1.09m9 5.819l-3-1.09m0 0l-3 1.09m3-1.09v3.409"/></svg>
+              </span>
+              <input id="company" class="field-input" placeholder="Acme Corp" [(ngModel)]="company" name="company" [disabled]="submitting" />
+            </div>
+            <p class="field-hint">Your leads and settings will be stored in a dedicated database for this company.</p>
+          </div>
+        } @else {
+          <div class="plan-grid">
+            @for (p of plans; track p) {
+              <button
+                type="button"
+                class="plan-card"
+                [class.selected]="plan === p"
+                (click)="selectPlan(p)"
+              >
+                <span class="plan-name">{{ p }}</span>
+                <span class="plan-price">{{ planPrice(p) }}</span>
+                <span class="plan-blurb">{{ planBlurb(p) }}</span>
+                @if (plan === p) {
+                  <span class="plan-check" aria-hidden="true">✓</span>
+                }
+              </button>
+            }
+          </div>
+        }
+
+        @if (error) {
+          <p class="form-error" role="alert">{{ error }}</p>
+        }
+
+        <div class="form-actions">
+          @if (signupStep > 1) {
+            <button type="button" class="btn-secondary" (click)="prevSignupStep()" [disabled]="submitting">Back</button>
+          }
+          @if (signupStep < 3) {
+            <button type="button" class="btn-primary" (click)="nextSignupStep()" [disabled]="submitting">Continue</button>
+          } @else {
+            <button type="button" class="btn-primary" (click)="submitSignup()" [disabled]="submitting">
+              {{ submitting ? 'Creating account…' : 'Create Account' }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </main>
+</div>

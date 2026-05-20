@@ -1,25 +1,64 @@
+using System.Text;
 using LeadScoring.Api.Background;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Repositories;
 using LeadScoring.Api.Services;
 using System.Net;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddDbContext<LeadScoringDbContext>(opt =>
+builder.Services.AddHttpContextAccessor();
+
+var masterConnectionString = builder.Configuration.GetConnectionString("Hiperbrains")
+    ?? throw new InvalidOperationException("Connection string 'Hiperbrains' is missing.");
+
+builder.Services.AddDbContext<MasterDbContext>(opt =>
 {
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("Hiperbrains")
-                   ?? throw new InvalidOperationException("Connection string 'Hiperbrains' is missing."));
+    opt.UseNpgsql(masterConnectionString, npg =>
+        npg.MigrationsHistoryTable("__MasterMigrationsHistory"));
     opt.ConfigureWarnings(warnings =>
         warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
 });
+
+builder.Services.AddScoped<ITenantDbContextAccessor, TenantDbContextAccessor>();
+builder.Services.AddScoped<LeadScoringDbContext>(sp =>
+    sp.GetRequiredService<ITenantDbContextAccessor>().GetDbContext());
+
+builder.Services.AddScoped<ITenantDatabaseProvisioner, TenantDatabaseProvisioner>();
+builder.Services.AddScoped<JwtAuthTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+var jwtSigningKey = builder.Configuration["Auth:JwtSigningKey"]
+    ?? builder.Configuration["Tracking:SigningKey"]
+    ?? throw new InvalidOperationException("Auth:JwtSigningKey or Tracking:SigningKey is required.");
+var jwtIssuer = builder.Configuration["Auth:JwtIssuer"] ?? "LeadScoring";
+var jwtAudience = builder.Configuration["Auth:JwtAudience"] ?? "LeadScoring.App";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            ClockSkew = TimeSpan.FromMinutes(2)
+        };
+    });
+builder.Services.AddAuthorization();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<LeadScoringService>();
 builder.Services.AddScoped<VisitorAttributionService>();
@@ -95,6 +134,12 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var masterDb = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+    await masterDb.Database.MigrateAsync();
+}
+
 app.UseForwardedHeaders();
 if (!app.Environment.IsDevelopment())
 {
@@ -104,6 +149,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseRouting();
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 
 var configuredEmailImagesPath = app.Configuration["PublicAssets:EmailImagesPhysicalPath"];
 var emailImagesSourcePath = ResolveEmailImagesSourcePath(configuredEmailImagesPath, app.Environment.ContentRootPath);

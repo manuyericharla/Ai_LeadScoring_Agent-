@@ -2,6 +2,7 @@ using LeadScoring.Api;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,7 @@ namespace LeadScoring.Api.Controllers;
 
 [ApiController]
 [Route("api/leads")]
+[Authorize]
 public class LeadsController(
     LeadScoringDbContext db,
     LeadImportService leadImportService,
@@ -64,6 +66,7 @@ public class LeadsController(
     }
 
     [HttpPost("email-exists")]
+    [AllowAnonymous]
     public async Task<ActionResult<LeadEmailExistsResponse>> CheckEmailExists([FromBody] LeadEmailExistsRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email))
@@ -83,6 +86,7 @@ public class LeadsController(
     }
 
     [HttpPost("website-demo/submit")]
+    [AllowAnonymous]
     public async Task<ActionResult<WebsiteDemoSubmitResponse>> SubmitWebsiteDemo([FromBody] WebsiteDemoSubmitRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.VisitorId))
@@ -106,6 +110,7 @@ public class LeadsController(
     }
 
     [HttpPost("identify")]
+    [AllowAnonymous]
     public async Task<ActionResult<LeadIdentifyResponse>> Identify([FromBody] LeadIdentifyRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.VisitorId))

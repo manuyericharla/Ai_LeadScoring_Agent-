@@ -2,6 +2,7 @@ using System.Text.Json;
 using LeadScoring.Api.Contracts;
 using LeadScoring.Api.Data;
 using LeadScoring.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,7 @@ namespace LeadScoring.Api.Controllers;
 
 [ApiController]
 [Route("api/company-product-configs")]
+[Authorize]
 public class CompanyProductConfigsController(LeadScoringDbContext db) : ControllerBase
 {
     [HttpPost]
