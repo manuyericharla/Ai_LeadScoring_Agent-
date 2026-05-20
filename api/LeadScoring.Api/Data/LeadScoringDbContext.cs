@@ -31,6 +31,10 @@ public class LeadScoringDbContext : DbContext
         {
             modelBuilder.HasDefaultSchema(_tenantSchema);
         }
+        else
+        {
+            modelBuilder.HasDefaultSchema("public");
+        }
 
         modelBuilder.Entity<Lead>().HasIndex(x => x.Email).IsUnique();
         modelBuilder.Entity<Lead>().HasIndex(x => x.VisitorId);

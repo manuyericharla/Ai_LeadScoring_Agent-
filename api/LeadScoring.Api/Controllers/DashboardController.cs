@@ -12,16 +12,24 @@ namespace LeadScoring.Api.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 [Authorize]
-public class DashboardController(LeadScoringDbContext db, ITenantContext tenantContext) : ControllerBase
+public class DashboardController(
+    ICompanyLeadDbAccessor companyLeadDb,
+    ITenantContext tenantContext,
+    ITenantLeadScope tenantLeadScope) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> Get()
+    public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         tenantContext.RequireTenant();
         const int nextEmailDelayHours = 24;
 
+        await tenantLeadScope.EnsureTenantContextMatchesUserAsync(cancellationToken);
+        var companyName = await tenantLeadScope.ResolveCompanyNameAsync(cancellationToken);
+        var db = companyLeadDb.GetDbContext();
+        var scopedLeads = tenantLeadScope.ApplyScope(db.Leads, companyName);
+
         var leads = await (
-            from l in db.Leads
+            from l in scopedLeads
             let lastEv = db.Events
                 .Where(e => e.LeadId == l.Id)
                 .OrderByDescending(e => e.TimestampUtc)
@@ -89,25 +97,28 @@ public class DashboardController(LeadScoringDbContext db, ITenantContext tenantC
                 l.ProfileCompletion,
                 l.SelectedPlan,
                 l.PlanRenewalDate))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         leads = await ApplyCampaignMetadataFallbackAsync(db, leads);
 
+        var scopedLeadIds = scopedLeads.Select(l => l.Id);
+
         var eventsByType = await db.Events
+            .Where(e => e.LeadId != null && scopedLeadIds.Contains(e.LeadId.Value))
             .GroupBy(e => e.Type)
             .Select(g => new { Type = g.Key.ToString(), Count = g.Count() })
-            .ToDictionaryAsync(k => k.Type, v => v.Count);
+            .ToDictionaryAsync(k => k.Type, v => v.Count, cancellationToken);
 
         var stageCounts = leads
             .GroupBy(l => l.Stage)
             .ToDictionary(g => g.Key, g => g.Count());
 
         var signedUpCount = leads.Count(x => x.SignupCompleted);
-        var firstSourceCounts = await db.Leads
+        var firstSourceCounts = await scopedLeads
             .AsNoTracking()
             .GroupBy(l => l.FirstSource)
             .Select(g => new { Source = g.Key, Count = g.Count() })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var firstSourceBuckets = firstSourceCounts
             .GroupBy(x => (x.Source ?? EventSource.Unknown).ToString(), StringComparer.OrdinalIgnoreCase)
@@ -118,7 +129,7 @@ public class DashboardController(LeadScoringDbContext db, ITenantContext tenantC
 
         return Ok(new
         {
-            companyName = tenantContext.CompanyName,
+            companyName,
             totalLeads = leads.Count,
             signedUpCount,
             stageCounts,
@@ -129,7 +140,7 @@ public class DashboardController(LeadScoringDbContext db, ITenantContext tenantC
     }
 
     private static async Task<List<LeadDashboardDto>> ApplyCampaignMetadataFallbackAsync(
-        LeadScoringDbContext db,
+        PublicCompanyDbContext db,
         List<LeadDashboardDto> leads)
     {
         var needs = leads.Where(x => string.IsNullOrWhiteSpace(x.LastEventCampaign)).Select(x => x.Id).ToHashSet();

@@ -31,6 +31,8 @@ builder.Services.AddDbContext<MasterDbContext>(opt =>
 });
 
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<ITenantLeadScope, TenantLeadScope>();
+builder.Services.AddScoped<ICompanyLeadDbAccessor, CompanyLeadDbAccessor>();
 builder.Services.AddScoped<ITenantDbContextAccessor, TenantDbContextAccessor>();
 builder.Services.AddScoped<LeadScoringDbContext>(sp =>
     sp.GetRequiredService<ITenantDbContextAccessor>().GetDbContext());

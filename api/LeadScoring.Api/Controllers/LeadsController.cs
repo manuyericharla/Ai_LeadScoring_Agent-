@@ -13,24 +13,29 @@ namespace LeadScoring.Api.Controllers;
 [Authorize]
 public class LeadsController(
     LeadScoringDbContext db,
+    ICompanyLeadDbAccessor companyLeadDb,
     LeadImportService leadImportService,
     VisitorAttributionService visitorAttributionService,
-    ITenantContext tenantContext) : ControllerBase
+    ITenantContext tenantContext,
+    ITenantLeadScope tenantLeadScope) : ControllerBase
 {
     [HttpGet("{leadId:guid}/events")]
-    public async Task<ActionResult<LeadEventsResponse>> GetLeadEvents(Guid leadId)
+    public async Task<ActionResult<LeadEventsResponse>> GetLeadEvents(Guid leadId, CancellationToken cancellationToken)
     {
         tenantContext.RequireTenant();
-        var lead = await db.Leads
+        await tenantLeadScope.EnsureTenantContextMatchesUserAsync(cancellationToken);
+        var companyName = await tenantLeadScope.ResolveCompanyNameAsync(cancellationToken);
+        var companyDb = companyLeadDb.GetDbContext();
+        var lead = await tenantLeadScope.ApplyScope(companyDb.Leads, companyName)
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == leadId);
+            .FirstOrDefaultAsync(x => x.Id == leadId, cancellationToken);
 
         if (lead is null)
         {
             return NotFound(new { message = "Lead not found." });
         }
 
-        var raw = await db.Events
+        var raw = await companyDb.Events
             .AsNoTracking()
             .Where(e => e.LeadId == leadId)
             .OrderBy(e => e.TimestampUtc)
@@ -44,7 +49,7 @@ public class LeadsController(
                 e.Campaign,
                 e.MetadataJson
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var events = raw
             .Select(e => new LeadEventDetailDto(
